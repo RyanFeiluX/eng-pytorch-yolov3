@@ -36,8 +36,8 @@ Clone, and `cd` into the repo directory. The first thing you need to do is to ge
 This time around, for v3, authors has supplied a weightsfile only for COCO [here](https://pjreddie.com/media/files/yolov3.weights), and place
 the weights file into the `models` directory.
 
+Firstly download weights file [yolov3.weights](https://pjreddie.com/media/files/yolov3.weights) to folder models. 
 ```
-Download weights file from https://pjreddie.com/media/files/yolov3.weights 
 python detect.py --images imgs --det det 
 ```
 
