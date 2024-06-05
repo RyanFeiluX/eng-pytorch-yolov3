@@ -300,8 +300,10 @@ def write_results_half(prediction, confidence, num_classes, nms=True, nms_conf=0
 
         #Get rid of the zero entries
         non_zero_ind = (torch.nonzero(image_pred[:, 4]))
+        if len(non_zero_ind.shape) == 0:
+            continue
         try:
-            image_pred_ = image_pred[non_zero_ind.squeeze(), :]
+            image_pred_ = image_pred[non_zero_ind.squeeze(), :].view(-1, image_pred.size(1))
         except:
             continue
 
@@ -314,10 +316,12 @@ def write_results_half(prediction, confidence, num_classes, nms=True, nms_conf=0
             cls_mask = image_pred_ * (image_pred_[:, -1] == cls).half().unsqueeze(1)
             class_mask_ind = torch.nonzero(cls_mask[:, -2]).squeeze()
 
-            image_pred_class = image_pred_[class_mask_ind]
+            image_pred_class = image_pred_[class_mask_ind].view(-1, image_pred_.size(1))
 
             #sort the detections such that the entry with the maximum objectness
             #confidence is at the top
+            if len(image_pred_class.shape) == 1:
+                image_pred_class = image_pred_class.unsqueeze(0)
             conf_sort_index = torch.sort(image_pred_class[:, 4], descending=True)[1]
             image_pred_class = image_pred_class[conf_sort_index]
             idx = image_pred_class.size(0)
@@ -340,9 +344,12 @@ def write_results_half(prediction, confidence, num_classes, nms=True, nms_conf=0
                     iou_mask = (ious < nms_conf).half().unsqueeze(1)
                     image_pred_class[i + 1:] *= iou_mask
 
-                    #Remove the non-zero entries
+                    # Keep the non-zero entries
                     non_zero_ind = torch.nonzero(image_pred_class[:, 4]).squeeze()
-                    image_pred_class = image_pred_class[non_zero_ind]
+                    image_pred_class = image_pred_class[non_zero_ind].view(-1, image_pred_class.size(1))
+
+            if len(non_zero_ind.size()) == 0:
+                continue
 
             #Concatenate the batch_id of the image to the detection
             #this helps us identify which image does the detection correspond to 
@@ -353,7 +360,7 @@ def write_results_half(prediction, confidence, num_classes, nms=True, nms_conf=0
             seq = batch_ind, image_pred_class
 
             if not write:
-                output = torch.cat(seq, 1)
+                output = torch.cat(seq, 1).to(output.device)
                 write = True
             else:
                 out = torch.cat(seq, 1)
