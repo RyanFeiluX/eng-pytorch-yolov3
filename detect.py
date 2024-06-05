@@ -10,7 +10,7 @@ import argparse
 import os
 import os.path as osp
 from darknet import Darknet
-from preprocess import prep_image, inp_to_image
+from preprocess import prep_image
 import pandas as pd
 import random
 import pickle as pkl
@@ -124,7 +124,7 @@ if __name__ == '__main__':
     assert inp_dim % 32 == 0
     assert inp_dim > 32
 
-    # If there's a GPU availible, put the model on GPU
+    # If there's a GPU available, put the model on GPU
     if CUDA:
         model.cuda()
 
@@ -135,11 +135,11 @@ if __name__ == '__main__':
     # Detection phase
     try:
         imlist = [osp.join(osp.realpath('.'), images, img) for img in os.listdir(images) if
-                  os.path.splitext(img)[1] == '.png' or os.path.splitext(img)[1] == '.jpeg' or os.path.splitext(img)[
-                      1] == '.jpg']
+                  os.path.splitext(img)[1] == '.png'
+                  or os.path.splitext(img)[1] == '.jpeg'
+                  or os.path.splitext(img)[1] == '.jpg']
     except NotADirectoryError:
-        imlist = []
-        imlist.append(osp.join(osp.realpath('.'), images))
+        imlist = [osp.join(osp.realpath('.'), images)]
     except FileNotFoundError:
         print("No file or directory with the name {}".format(images))
         exit()
@@ -158,10 +158,10 @@ if __name__ == '__main__':
     if CUDA:
         im_dim_list = im_dim_list.cuda()
 
-    leftover = 0
+    leftover = 1 if len(im_dim_list) % batch_size else 0
 
-    if len(im_dim_list) % batch_size:
-        leftover = 1
+    # if len(im_dim_list) % batch_size:
+    #     leftover = 1
 
     if batch_size != 1:
         num_batches = len(imlist) // batch_size + leftover
@@ -170,18 +170,14 @@ if __name__ == '__main__':
 
     print('batch size: %d, batch total: %d' % (batch_size, len(im_batches)))
 
-    i = 0
-
     write = False
     # model(get_test_input(inp_dim, CUDA), CUDA)
 
     start_det_loop = time.time()
 
-    objs = {}
-
-    batch_index = 0
-    for batch in im_batches:
-        print('batch index: %d' % batch_index, flush=True)
+    output = None
+    for idx, batch in enumerate(im_batches):
+        print('Batch: %d' % idx, flush=True)
 
         # load the image
         start = time.time()
@@ -189,7 +185,7 @@ if __name__ == '__main__':
             batch = batch.cuda()
 
         # Apply offsets to the result predictions
-        # Tranform the predictions as described in the YOLO paper
+        # Transform the predictions as described in the YOLO paper
         # flatten the prediction vector
         # B x (bbox cord x no. of anchors) x grid_w x grid_h --> B x bbox x (all the boxes) 
         # Put every proposed box as a row.
@@ -207,45 +203,50 @@ if __name__ == '__main__':
         # loops are slower than vectorised operations.
 
         prediction = write_results(prediction, confidence, num_classes, nms=True, nms_conf=nms_thesh)
-        # if prediction is None:
-        #     continue
-
-        # Per write_results() implementation, return integer 0 in case of nothing detected.
-        if type(prediction) is int:
-            i += 1
-            continue
 
         end = time.time()
 
-        #        print(end - start)
+        # Per write_results() implementation, return integer 0 in case of nothing detected.
+        if type(prediction) is int:
+            for im_num, image in enumerate(imlist[idx * batch_size: min((idx + 1) * batch_size, len(imlist))]):
+                im_id = idx * batch_size + im_num
+                objs = []
+                print("{0:20s} predicted in {1:6.3f} seconds".format(os.path.basename(image),
+                                                                     (end - start) / batch_size))
+                print("{0:20s} {1:s}".format("Objects Detected:", " ".join(objs)))
+                print("----------------------------------------------------------")
+            if output is None:
+                output = prediction
+            continue
 
-        prediction[:, 0] += i * batch_size
+        prediction[:, 0] += idx * batch_size
 
         if not write:
             output = prediction
-            write = 1
+            write = True
         else:
-            assert output.shape[1] == prediction.shape[
-                1], "Mismatch sizes in dim=1 during concatenate two tensors!!! {} vs {}".format(output.shape,
-                                                                                                prediction.shape)
+            assert type(output) not in [int, None], "Internal error: output is unavailable so far."
+            assert output.shape[1] == prediction.shape[1], (
+                "Mismatch sizes in dim=1 during concatenate two tensors!!! {} vs {}".format(output.shape,
+                                                                                            prediction.shape))
             output = torch.cat((output, prediction))
 
-        for im_num, image in enumerate(imlist[i * batch_size: min((i + 1) * batch_size, len(imlist))]):
-            im_id = i * batch_size + im_num
+        for im_num, image in enumerate(imlist[idx * batch_size: min((idx + 1) * batch_size, len(imlist))]):
+            im_id = idx * batch_size + im_num
             objs = [classes[int(x[-1])] for x in output if int(x[0]) == im_id]
-            print("{0:20s} predicted in {1:6.3f} seconds".format(os.path.basename(image), (end - start) / batch_size))
-            print("{0:20s} {1:s}".format("Objects Detected:", " ".join(objs)))
-            print("----------------------------------------------------------")
-        i += 1
+            print("{0:20s} predicted in {1:6.3f} seconds".format(os.path.basename(image),
+                                                                 (end - start) / batch_size))
+            print("{0:20s} {1:s}".format("Objects Detected:", ", ".join(objs)))
+            print("----------------------------------------------------------", flush=True)
 
         if CUDA:
             torch.cuda.synchronize()
 
-        batch_index += 1
-    try:
-        output
-    except NameError:
+    if output is None:
         print("No detections were made")
+        exit()
+    elif type(output) is int:
+        print("No object was detected")
         exit()
 
     im_dim_list = torch.index_select(im_dim_list, 0, output[:, 0].long())
@@ -257,9 +258,12 @@ if __name__ == '__main__':
 
     output[:, 1:5] /= scaling_factor
 
-    for i in range(output.shape[0]):
-        output[i, [1, 3]] = torch.clamp(output[i, [1, 3]], 0.0, im_dim_list[i, 0])
-        output[i, [2, 4]] = torch.clamp(output[i, [2, 4]], 0.0, im_dim_list[i, 1])
+    for idx in range(output.shape[0]):
+        # Forced type cast for green code inspection
+        output[idx, [1, 3]] = torch.clamp(output[idx, [1, 3]],
+                                          torch.Tensor([0.0]).to('cuda' if CUDA else 'cpu'), im_dim_list[idx, 0])
+        output[idx, [2, 4]] = torch.clamp(output[idx, [2, 4]],
+                                          torch.Tensor([0.0]).to('cuda' if CUDA else 'cpu'), im_dim_list[idx, 1])
 
     output_recast = time.time()
 
