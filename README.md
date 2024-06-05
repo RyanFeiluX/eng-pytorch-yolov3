@@ -3,7 +3,7 @@
 This repository is forked for learning purpose. Your comments and issues are welcome.
 
 
-This repository contains code for a object detector based on [YOLOv3: An Incremental Improvement](https://pjreddie.com/media/files/papers/YOLOv3.pdf), implementedin PyTorch. The code is based on the official code of [YOLO v3](https://github.com/pjreddie/darknet), as well as a PyTorch 
+This repository contains code for a object detector based on [YOLOv3: An Incremental Improvement](https://pjreddie.com/media/files/papers/YOLOv3.pdf), implemented in PyTorch. The code is based on the official code of [YOLO v3](https://github.com/pjreddie/darknet), as well as a PyTorch 
 port of the original code, by [marvis](https://github.com/marvis/pytorch-yolo2). One of the goals of this code is to improve
 upon the original port by removing redundant parts of the code (The official code is basically a fully blown deep learning 
 library, and includes stuff like sequence models, which are not used in YOLO). I've also tried to keep the code minimal, and 
@@ -40,6 +40,12 @@ Firstly download weights file [yolov3.weights](https://pjreddie.com/media/files/
 ```
 python detect.py --images imgs --det det 
 ```
+
+More pretrained models can be fetched from following links.
+
+`yolov3-tiny` : [cfg](https://github.com/pjreddie/darknet/blob/master/cfg/yolov3-tiny.cfg), [weights](https://pjreddie.com/media/files/yolov3-tiny.weights)
+
+`yolov3-608` : [cfg](https://github.com/pjreddie/darknet/blob/master/cfg/yolov3.cfg), [weights](https://pjreddie.com/media/files/yolov3.weights)
 
 All arguments are optional in this implementation. Their default values are list below. You can change them on your needs.
 
