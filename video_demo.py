@@ -7,7 +7,7 @@ import numpy as np
 import cv2
 from util import *
 from darknet import Darknet
-from preprocess import prep_image, inp_to_image, letterbox_image
+from preprocess import prep_image
 import pandas as pd
 import random
 import pickle as pkl
@@ -26,21 +26,6 @@ def get_test_input(input_dim, CUDA):
         img_ = img_.cuda()
 
     return img_
-
-
-def prep_image(img, inp_dim):
-    """
-    Prepare image for inputting to the neural network. 
-    
-    Returns a Variable 
-    """
-
-    orig_im = img
-    dim = orig_im.shape[1], orig_im.shape[0]
-    img = (letterbox_image(orig_im, (inp_dim, inp_dim)))
-    img_ = img[:, :, ::-1].transpose((2, 0, 1)).copy()
-    img_ = torch.from_numpy(img_).float().div(255.0).unsqueeze(0)
-    return img_, orig_im, dim
 
 
 def write(x, img):
@@ -157,8 +142,13 @@ if __name__ == '__main__':
             output[:, 1:5] /= scaling_factor
 
             for i in range(output.shape[0]):
-                output[i, [1, 3]] = torch.clamp(output[i, [1, 3]], 0.0, im_dim[i, 0])
-                output[i, [2, 4]] = torch.clamp(output[i, [2, 4]], 0.0, im_dim[i, 1])
+                # Forced type cast for green code inspection
+                output[i, [1, 3]] = torch.clamp(output[i, [1, 3]],
+                                                torch.Tensor([0.0]).to('cuda' if CUDA else 'cpu'),
+                                                im_dim[i, 0])
+                output[i, [2, 4]] = torch.clamp(output[i, [2, 4]],
+                                                torch.Tensor([0.0]).to('cuda' if CUDA else 'cpu'),
+                                                im_dim[i, 1])
 
             classes = load_classes('data/coco.names')
             colors = pkl.load(open("pallete", "rb"))
