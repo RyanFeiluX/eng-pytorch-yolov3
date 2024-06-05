@@ -53,9 +53,9 @@ All arguments are optional in this implementation. Their default values are list
 
 `--nms_thresh` takes 0.4 as default value.
 
-`--cfg` takes yolov3.cfg as default value.
+`--cfg` takes cfg/yolov3.cfg as default value.
 
-`--weights` takes yolov3.weights as default value.
+`--weights` takes models/yolov3.weights as default value.
 
 `--reso` takes 416 as default value.
 
