@@ -10,7 +10,7 @@ import argparse
 import os
 import os.path as osp
 from darknet import Darknet
-from preprocess import prep_image, read_image
+from preprocess import prep_image, read_image, get_weight_config
 import pandas as pd
 import random
 import pickle as pkl
@@ -64,10 +64,12 @@ def arg_parse():
                         help="Object Confidence to filter predictions",
                         default=0.5)
     parser.add_argument("--nms_thresh", dest="nms_thresh", help="NMS Threshhold", default=0.4)
-    parser.add_argument("--cfg", dest='cfgfile', help="Config file",
-                        default="cfg/yolov3.cfg", type=str)
-    parser.add_argument("--weights", dest='weightsfile', help="weightsfile",
-                        default="models/yolov3.weights", type=str)
+    # parser.add_argument("--cfg", dest='cfgfile', help="Config file",
+    #                     default="cfg/yolov3.cfg", type=str)
+    # parser.add_argument("--weights", dest='weightsfile', help="weightsfile",
+    #                     default="models/yolov3.weights", type=str)
+    parser.add_argument("--pt_model", dest='pretrained_model', help="pretrained_model",
+                        default="yolov3", type=str)
     parser.add_argument("--reso", dest='reso',
                         help="Input resolution of the network. Increase to increase accuracy. "
                              "Decrease to increase speed",
@@ -96,8 +98,9 @@ if __name__ == '__main__':
 
     # Set up the neural network
     print("Loading network.....")
-    model = Darknet(args.cfgfile)
-    model.load_weights(args.weightsfile)
+    weightsfile, cfgfile = get_weight_config(args.pretrained_model)
+    model = Darknet(cfgfile)
+    model.load_weights(weightsfile)
     print("Network successfully loaded")
 
     model.net_info["height"] = args.reso

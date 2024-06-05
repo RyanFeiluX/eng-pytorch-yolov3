@@ -7,7 +7,7 @@ import numpy as np
 import cv2
 from util import *
 from darknet import Darknet
-from preprocess import prep_image
+from preprocess import prep_image, get_weight_config
 import pandas as pd
 import random
 import argparse
@@ -58,10 +58,12 @@ def arg_parse():
                         help="Input resolution of the network. Increase to increase accuracy. "
                              "Decrease to increase speed",
                         default="160", type=str)
-    parser.add_argument("--cfg", dest='cfgfile', help="Config file",
-                        default="cfg/yolov3.cfg", type=str)
-    parser.add_argument("--weights", dest='weightsfile', help="weightsfile",
-                        default="models/yolov3.weights", type=str)
+    # parser.add_argument("--cfg", dest='cfgfile', help="Config file",
+    #                     default="cfg/yolov3.cfg", type=str)
+    # parser.add_argument("--weights", dest='weightsfile', help="weightsfile",
+    #                     default="models/yolov3.weights", type=str)
+    parser.add_argument("--pt_model", dest='pretrained_model', help="pretrained_model",
+                        default="yolov3", type=str)
     return parser.parse_args()
 
 
@@ -72,8 +74,8 @@ if __name__ == '__main__':
     args = arg_parse()
     confidence = float(args.confidence)
     nms_thesh = float(args.nms_thresh)
-    cfgfile = args.cfgfile
-    weightsfile = args.weightsfile
+    # cfgfile = args.cfgfile
+    # weightsfile = args.weightsfile
 
     start = 0
     CUDA = torch.cuda.is_available()
@@ -81,6 +83,7 @@ if __name__ == '__main__':
     # num_classes = 80
     bbox_attrs = 5 + num_classes
 
+    weightsfile, cfgfile = get_weight_config(args.pretrained_model)
     model = Darknet(cfgfile)
     model.load_weights(weightsfile)
 

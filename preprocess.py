@@ -1,5 +1,5 @@
 from __future__ import division
-
+import os
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
@@ -68,3 +68,9 @@ def inp_to_image(inp):
 
     inp = inp[:, :, ::-1]
     return inp
+
+
+def get_weight_config(weight_config:str)->tuple:
+    fn_weight = os.path.join('models', weight_config + '.weights')
+    fn_config = os.path.join('cfg', weight_config + '.cfg')
+    return fn_weight, fn_config
