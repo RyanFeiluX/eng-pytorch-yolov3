@@ -39,7 +39,7 @@ def write(x, img):
     c2 = c1[0] + t_size[0] + 3, c1[1] + t_size[1] + 4
     cv2.rectangle(img, c1, c2, color, -1)
     cv2.putText(img, label, (c1[0], c1[1] + t_size[1] + 4),
-                cv2.FONT_HERSHEY_PLAIN, 1, [225, 255, 255], 1);
+                cv2.FONT_HERSHEY_PLAIN, 1, [225, 255, 255], 1)
     return img
 
 
@@ -59,10 +59,6 @@ def arg_parse():
                         help="Object Confidence to filter predictions", default=0.5)
     parser.add_argument("--nms_thresh", dest="nms_thresh",
                         help="NMS Threshhold", default=0.4)
-    # parser.add_argument("--cfg", dest='cfgfile', help="Config file",
-    #                     default="cfg/yolov3.cfg", type=str)
-    # parser.add_argument("--weights", dest='weightsfile', help="weightsfile",
-    #                     default="models/yolov3.weights", type=str)
     parser.add_argument("--pt_model", dest='pretrained_model', help="pretrained_model",
                         default="yolov3", type=str)
     parser.add_argument("--reso", dest='reso',
@@ -120,8 +116,10 @@ if __name__ == '__main__':
             if CUDA:
                 img = img.cuda().half()
                 im_dim = im_dim.half().cuda()
-                write_results = write_results_half
+                abs_write_results = write_results_half
                 predict_transform = predict_transform_half
+            else:
+                abs_write_results = write_results
 
             with torch.no_grad():
                 output = model(Variable(img), CUDA)
@@ -145,8 +143,10 @@ if __name__ == '__main__':
             output[:, 1:5] /= scaling_factor
 
             for i in range(output.shape[0]):
-                output[i, [1, 3]] = torch.clamp(output[i, [1, 3]], torch.Tensor([0.0]).to(output.device), im_dim[i, 0]).half()
-                output[i, [2, 4]] = torch.clamp(output[i, [2, 4]], torch.Tensor([0.0]).to(output.device), im_dim[i, 1]).half()
+                output[i, [1, 3]] = torch.clamp(output[i, [1, 3]],
+                                                torch.Tensor([0.0]).to(output.device), im_dim[i, 0]).half()
+                output[i, [2, 4]] = torch.clamp(output[i, [2, 4]],
+                                                torch.Tensor([0.0]).to(output.device), im_dim[i, 1]).half()
 
             classes = load_classes('data/coco.names')
             colors = pkl.load(open("pallete", "rb"))
@@ -159,7 +159,6 @@ if __name__ == '__main__':
                 break
             frames += 1
             print("FPS of the video is {:5.2f}".format(frames / (time.time() - start)))
-
 
         else:
             break

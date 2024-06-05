@@ -16,7 +16,7 @@ class test_net(nn.Module):
         super(test_net, self).__init__()
         self.num_layers= num_layers
         self.linear_1 = nn.Linear(input_size, 5)
-        self.middle = nn.ModuleList([nn.Linear(5,5) for x in range(num_layers)])
+        self.middle = nn.ModuleList([nn.Linear(5,5) for _ in range(num_layers)])
         self.output = nn.Linear(5,2)
     
     def forward(self, x):
@@ -94,7 +94,7 @@ class DetectionLayer(nn.Module):
         x = x.data
         global CUDA
         prediction = x
-        prediction = predict_transform(prediction, inp_dim, self.anchors, num_classes, confidence, CUDA)
+        prediction = predict_transform(prediction, inp_dim, self.anchors, num_classes, CUDA=CUDA)
         return prediction
         
 

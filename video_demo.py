@@ -38,7 +38,8 @@ def write(x, img):
     t_size = cv2.getTextSize(label, cv2.FONT_HERSHEY_PLAIN, 1, 1)[0]
     c2 = c1[0] + t_size[0] + 3, c1[1] + t_size[1] + 4
     cv2.rectangle(img, c1, c2, color, -1)
-    cv2.putText(img, label, (c1[0], c1[1] + t_size[1] + 4), cv2.FONT_HERSHEY_PLAIN, 1, [225, 255, 255], 1);
+    cv2.putText(img, label, (c1[0], c1[1] + t_size[1] + 4),
+                cv2.FONT_HERSHEY_PLAIN, 1, [225, 255, 255], 1)
     return img
 
 
@@ -59,10 +60,6 @@ def arg_parse():
                         help="Object Confidence to filter predictions", default=0.5)
     parser.add_argument("--nms_thresh", dest="nms_thresh",
                         help="NMS Threshold", default=0.4)
-    # parser.add_argument("--cfg", dest='cfgfile', help="Config file",
-    #                     default="cfg/yolov3.cfg", type=str)
-    # parser.add_argument("--weights", dest='weightsfile', help="weightsfile",
-    #                     default="models/yolov3.weights", type=str)
     parser.add_argument("--pt_model", dest='pretrained_model', help="pretrained_model",
                         default="yolov3", type=str)
     parser.add_argument("--reso", dest='reso',
@@ -127,7 +124,7 @@ if __name__ == '__main__':
                 output = model(Variable(img), CUDA)
             output = write_results(output, confidence, num_classes, nms=True, nms_conf=nms_thesh)
 
-            if type(output) == int:
+            if type(output) is int:
                 frames += 1
                 print("FPS of the video is {:5.2f}".format(frames / (time.time() - start)))
                 cv2.imshow("frame", orig_im)
@@ -164,7 +161,6 @@ if __name__ == '__main__':
                 break
             frames += 1
             print("FPS of the video is {:5.2f}".format(frames / (time.time() - start)))
-
 
         else:
             break

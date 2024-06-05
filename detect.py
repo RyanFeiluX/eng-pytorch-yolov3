@@ -64,10 +64,6 @@ def arg_parse():
                         help="Object Confidence to filter predictions",
                         default=0.5)
     parser.add_argument("--nms_thresh", dest="nms_thresh", help="NMS Threshhold", default=0.4)
-    # parser.add_argument("--cfg", dest='cfgfile', help="Config file",
-    #                     default="cfg/yolov3.cfg", type=str)
-    # parser.add_argument("--weights", dest='weightsfile', help="weightsfile",
-    #                     default="models/yolov3.weights", type=str)
     parser.add_argument("--pt_model", dest='pretrained_model', help="pretrained_model",
                         default="yolov3", type=str)
     parser.add_argument("--reso", dest='reso',
