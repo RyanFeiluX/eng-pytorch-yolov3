@@ -1,6 +1,6 @@
 # A PyTorch implementation of a YOLO v3 Object Detector
 
-[UPDATE] : This repo serves as a driver code for my research. I just graduated college, and am very busy looking for research internship / fellowship roles before eventually applying for a masters. I won't have the time to look into issues for the time being. Thank you.
+This repository is forked for learning purpose. Your comments and issues are welcome.
 
 
 This repository contains code for a object detector based on [YOLOv3: An Incremental Improvement](https://pjreddie.com/media/files/papers/YOLOv3.pdf), implementedin PyTorch. The code is based on the official code of [YOLO v3](https://github.com/pjreddie/darknet), as well as a PyTorch 
@@ -26,26 +26,42 @@ Using PyTorch 0.3 will break the detector.
 
 
 ## Detection Example
-
-![Detection Example](https://i.imgur.com/m2jwneng.png)
+Note: Following examples are completed on Windows 11 with RTX3090.
+<img alt="Detection Example" src="https://github.com/RyanFeiluX/eng-pytorch-yolov3/blob/master/det_OIP-C.jpg"/>
 ## Running the detector
 
-### On single or multiple images
+# On single or multiple images
 
-Clone, and `cd` into the repo directory. The first thing you need to do is to get the weights file
-This time around, for v3, authors has supplied a weightsfile only for COCO [here](https://pjreddie.com/media/files/yolov3.weights), and place 
-
-the weights file into your repo directory. Or, you could just type (if you're on Linux)
+Clone, and `cd` into the repo directory. The first thing you need to do is to get the weights file.
+This time around, for v3, authors has supplied a weightsfile only for COCO [here](https://pjreddie.com/media/files/yolov3.weights), and place
+the weights file into the `models` directory.
 
 ```
-wget https://pjreddie.com/media/files/yolov3.weights 
+Download weights file from https://pjreddie.com/media/files/yolov3.weights 
 python detect.py --images imgs --det det 
 ```
 
+All arguments are optional in this implementation. Their default values are list below. You can change them on your needs.
 
-`--images` flag defines the directory to load images from, or a single image file (it will figure it out), and `--det` is the directory
-to save images to. Other setting such as batch size (using `--bs` flag) , object threshold confidence can be tweaked with flags that can be looked up with. 
+`--images` flag defines the directory to load images from, or a single image file (it will figure it out).
 
+`--det` is the directory to save images with detection box and annotation to.
+
+`--bs` takes 1 as default value.
+
+`--condifence` takes 0.5 as default value.
+
+`--nms_thresh` takes 0.4 as default value.
+
+`--cfg` takes yolov3.cfg as default value.
+
+`--weights` takes yolov3.weights as default value.
+
+`--reso` takes 416 as default value.
+
+`--scales` takes 1,2,3 as default value.
+
+More explanation of the arguments can be found using follow command line.
 ```
 python detect.py -h
 ```
@@ -57,9 +73,9 @@ You can change the resolutions of the input image by the `--reso` flag. The defa
 python detect.py --images imgs --det det --reso 320
 ```
 
-### On Video
-For this, you should run the file, video_demo.py with --video flag specifying the video file. The video file should be in .avi format
-since openCV only accepts OpenCV as the input format. 
+# On Video
+For this, you should run the script video_demo.py with --video flag specifying a video file. The video file should be in *.avi* or *.mp4* format.
+For other formats, they were not verified yet in the experiments. If interested, please look into the documents of OpenCV which is used as interface to input videos.
 
 ```
 python video_demo.py --video video.avi
@@ -73,7 +89,7 @@ To speed video inference, you can try using the video_demo_half.py file instead 
 precision floats instead of 32-bit float. I haven't seen big improvements, but I attribute that to having an older card 
 (Tesla K80, Kepler arch). If you have one of cards with fast float16 support, try it out, and if possible, benchmark it. 
 
-### On a Camera
+# On a Camera
 Same as video module, but you don't have to specify the video file since feed will be taken from your camera. To be precise, 
 feed will be taken from what the OpenCV, recognises as camera 0. The default image resolution is 160 here, though you can change it with `reso` flag.
 
