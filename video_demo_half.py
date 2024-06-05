@@ -52,9 +52,9 @@ def arg_parse():
     parser = argparse.ArgumentParser(description='YOLO v2 Video Detection Module')
 
     parser.add_argument("--video", dest='video', help="Video to run detection upon",
-                        default="video.avi", type=str)
-    parser.add_argument("--dataset", dest="dataset",
-                        help="Dataset on which the network has been trained", default="pascal")
+                        default="videos/1.mp4", type=str)
+    # parser.add_argument("--dataset", dest="dataset",
+    #                     help="Dataset on which the network has been trained", default="pascal")
     parser.add_argument("--confidence", dest="confidence",
                         help="Object Confidence to filter predictions", default=0.5)
     parser.add_argument("--nms_thresh", dest="nms_thresh",
