@@ -97,12 +97,15 @@ def unique(tensor):
     return tensor_res
 
 
-def write_results(prediction, confidence, num_classes, nms=True, nms_conf=0.4):
+def write_results(prediction, confidence, nms=True, nms_conf=0.4):
     # Infor pattern in last dim of prediction: x,y,x,h,confidence,class1...class80.
     # Extract first two dims via slicing confidence in last dim.
     conf_mask = (prediction[:, :, 4] > confidence).float().unsqueeze(2)
     # equivalent of above line: (prediction[:,:,4] > confidence).float().unsqueeze(-1)
     prediction = prediction * conf_mask  # Binarize prediction result
+
+    # IMPROVEMENT Calculate num_classes from prediction instead of num_classes argument
+    num_classes = prediction.size(2) - 5
 
     try:
         # Get positions of all items with non-zero confidence. The positions are represented as a 2-dim matrix.

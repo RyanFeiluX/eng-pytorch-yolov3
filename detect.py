@@ -184,7 +184,7 @@ if __name__ == '__main__':
         # clubbing these ops in one loop instead of two.
         # loops are slower than vectorised operations.
 
-        prediction = write_results(prediction, confidence, num_classes, nms=True, nms_conf=nms_thesh)
+        prediction = write_results(prediction, confidence, nms=True, nms_conf=nms_thesh)
 
         end = time.time()
 

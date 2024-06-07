@@ -116,7 +116,7 @@ if __name__ == '__main__':
                 img = img.cuda()
 
             output = model(Variable(img), CUDA)
-            output = write_results(output, confidence, num_classes, nms=True, nms_conf=nms_thesh)
+            output = write_results(output, confidence, nms=True, nms_conf=nms_thesh)
 
             if type(output) is int:
                 frames += 1
