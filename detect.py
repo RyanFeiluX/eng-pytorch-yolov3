@@ -84,7 +84,7 @@ if __name__ == '__main__':
     images = args.images
     batch_size = int(args.bs)
     confidence = float(args.confidence)
-    nms_thesh = float(args.nms_thresh)
+    nms_thresh = float(args.nms_thresh)
     start = 0
 
     CUDA = torch.cuda.is_available()
@@ -131,7 +131,7 @@ if __name__ == '__main__':
 
     batches = list(map(prep_image,
                        [read_image(imgfile) for imgfile in imlist],
-                       [inp_dim for x in range(len(imlist))]))
+                       [inp_dim for _ in range(len(imlist))]))
     im_batches = [x[0] for x in batches]
     orig_ims = [x[1] for x in batches]
     im_dim_list = [x[2] for x in batches]
@@ -173,8 +173,10 @@ if __name__ == '__main__':
         # Put every proposed box as a row.
         with torch.no_grad():
             prediction = model(Variable(batch), CUDA)
-
-        #        prediction = prediction[:,scale_indices]
+            # prediction: batch size * bboxes of all anchors & all scales      * (bbox coord, confidence, classes)
+            #             1          * 10647                                   * 85
+            # detail:     batch size * anchors of 3 scales * bboxes per anchor * (bbox coord, confidence, classes)
+            #             1          * (13*13+26*26+52*52) * 3                 * (4+1+80)
 
         # get the boxes with object confidence > threshold
         # Convert the coordinates to absolute coordinates
@@ -184,7 +186,7 @@ if __name__ == '__main__':
         # clubbing these ops in one loop instead of two.
         # loops are slower than vectorised operations.
 
-        prediction = write_results(prediction, confidence, nms=True, nms_conf=nms_thesh)
+        prediction = write_results(prediction, confidence, nms=True, nms_conf=nms_thresh)
 
         end = time.time()
 
