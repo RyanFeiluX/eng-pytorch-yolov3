@@ -98,17 +98,20 @@ def unique(tensor):
 
 
 def write_results(prediction, confidence, nms=True, nms_conf=0.4):
-    # Infor pattern in last dim of prediction: x,y,x,h,confidence,class1...class80.
+    # Shape of prediction: batch x bbox x (bbox coord + confidence + classes)
+    # Pattern in last dimension of prediction: cx,cy,w,h,confidence,classes(x80).
     # Extract first two dims via slicing confidence in last dim.
+    # unsqueeze to add 2nd dim which was suppressed during slicing
     conf_mask = (prediction[:, :, 4] > confidence).float().unsqueeze(2)
-    # equivalent of above line: (prediction[:,:,4] > confidence).float().unsqueeze(-1)
+    # equivalent: (prediction.select(2,4) > confidence).float().unsqueeze(-1)
     prediction = prediction * conf_mask  # Binarize prediction result
 
     # IMPROVEMENT Calculate num_classes from prediction instead of num_classes argument
     num_classes = prediction.size(2) - 5
 
     try:
-        # Get positions of all items with non-zero confidence. The positions are represented as a 2-dim matrix.
+        # Get all bboxes with non-zero confidence. The bboxes are represented as a 2-dim matrix, B * bbox index.
+        # Then transpose the matrix to get dimension: bbox index * B
         ind_nz = torch.nonzero(prediction[:, :, 4]).transpose(0, 1).contiguous()
     except Exception as e:
         print('Exception in calling torch.nonzero(): %s' % repr(e), flush=True)
@@ -120,30 +123,28 @@ def write_results(prediction, confidence, nms=True, nms_conf=0.4):
     box_a[:, :, 1] = (prediction[:, :, 1] - prediction[:, :, 3] / 2)
     box_a[:, :, 2] = (prediction[:, :, 0] + prediction[:, :, 2] / 2)
     box_a[:, :, 3] = (prediction[:, :, 1] + prediction[:, :, 3] / 2)
-    prediction[:, :, :4] = box_a[:, :, :4]
+    prediction[:, :, :4] = box_a[:, :, :4]  # Overwrite bbox coord cx,cx,w,h -> x1,y1,x2,y2
 
     batch_size = prediction.size(0)
 
-    output = prediction.new(1, prediction.size(2) + 1)
+    output = prediction.new(1, prediction.size(2) + 1)  # Extend last dimension by 1 to keep image No.
     write = False
 
     for ind in range(batch_size):
         # select the image from the batch
-        image_pred = prediction[ind]
+        image_pred = prediction[ind][:, :7]
 
         # Get the class having maximum score, and the index of that class
         # Get rid of num_classes softmax scores
         # Add the class index and the class score of class having maximum score
-        max_conf, max_conf_score = torch.max(image_pred[:, 5:5 + num_classes], 1)
+        max_conf, max_conf_score = torch.max(prediction[ind][:, 5:5 + num_classes], 1)
         max_conf = max_conf.float().unsqueeze(1)
         max_conf_score = max_conf_score.float().unsqueeze(1)
-        # Equivalent of above 3 lines:
-        # max_conf, max_conf_score = torch.max(image_pred[:, 5:5 + num_classes], 1, keepdim=True)
         seq = (image_pred[:, :5], max_conf, max_conf_score)
         image_pred = torch.cat(seq, 1)
 
         # Get rid of the zero entries
-        non_zero_ind = (torch.nonzero(image_pred[:, 4]))  # todo Duplication of above variable ind_nz???
+        non_zero_ind = (torch.nonzero(image_pred[:, 4]))  # Equivalent: ind_nz[1].unsqueeze(1)
 
         image_pred_ = image_pred[non_zero_ind.squeeze(), :].view(-1, 7)
 
@@ -157,24 +158,24 @@ def write_results(prediction, confidence, nms=True, nms_conf=0.4):
         for cls in img_classes:
             # get the detections with one particular class
             cls_mask = image_pred_ * (image_pred_[:, -1] == cls).float().unsqueeze(1)
-            class_mask_ind = torch.nonzero(cls_mask[:, -2]).squeeze()
+            class_mask_ind = torch.nonzero(cls_mask[:, -2]).squeeze()  # Slice class prob
 
-            image_pred_class = image_pred_[class_mask_ind].view(-1, 7)
+            image_pred_class = image_pred_[class_mask_ind, :].view(-1, 7)
 
             # sort the detections such that the entry with the maximum objectiveness
             # confidence is at the top
             conf_sort_index = torch.sort(image_pred_class[:, 4], descending=True)[1]  # [1] indicates index part
             image_pred_class = image_pred_class[conf_sort_index]
-            idx = image_pred_class.size(0)
+            clscnt = image_pred_class.size(0)
 
             # if nms has to be done
             if nms:
                 # For each detection
-                for i in range(idx):
+                for i in range(clscnt):
                     # Get the IOUs of all boxes that come after the one we are looking at
                     # in the loop
                     try:
-                        # Calculate IoU between class i and class i+1 ~ class idx
+                        # Calculate IoU between class i and class i+1 ~ class n
                         ious = bbox_iou(image_pred_class[i].unsqueeze(0), image_pred_class[i + 1:])
                     except ValueError:
                         break
@@ -186,7 +187,7 @@ def write_results(prediction, confidence, nms=True, nms_conf=0.4):
                     iou_mask = (ious < nms_conf).float().unsqueeze(1)
                     image_pred_class[i + 1:] *= iou_mask
 
-                    # Keep the non-zero entries following existing entries in image_pred_class in term of dim-0
+                    # Keep the non-zero entries following existing entries in image_pred_class in dim=0
                     non_zero_ind = torch.nonzero(image_pred_class[:, 4]).squeeze()
                     image_pred_class = image_pred_class[non_zero_ind].view(-1, 7)
 
@@ -196,9 +197,9 @@ def write_results(prediction, confidence, nms=True, nms_conf=0.4):
             # the batch_dim is flattened
             # batch is identified by extra batch column
 
-            batch_ind = image_pred_class.new(image_pred_class.size(0), 1).fill_(ind)
-            seq = batch_ind, image_pred_class
-            # output entry pattern: batch_id,x,y,w,h,confidence,class-index,class-score
+            img_ind = image_pred_class.new(image_pred_class.size(0), 1).fill_(ind)
+            seq = img_ind, image_pred_class
+            # output entry pattern: img_id,x1,y1,x2,y2,confidence,class-prob,class-index
             if not write:
                 output = torch.cat(seq, 1)
                 write = True
