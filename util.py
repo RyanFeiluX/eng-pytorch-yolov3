@@ -26,6 +26,7 @@ def convert2cpu(matrix):
 
 
 def predict_transform(prediction, inp_dim, anchors, num_classes, CUDA=True):
+    # coord <-> input: bx = cx + sigmoid(tx)
     batch_size = prediction.size(0)
     stride = inp_dim // prediction.size(2)
     grid_size = inp_dim // stride  # How about directly getting the same from prediction.size(-1)?
@@ -38,7 +39,7 @@ def predict_transform(prediction, inp_dim, anchors, num_classes, CUDA=True):
     prediction = prediction.transpose(1, 2).contiguous()
     prediction = prediction.view(batch_size, grid_size * grid_size * num_anchors, bbox_attrs)
 
-    #Sigmoid the  centre_X, centre_Y. and object confidencce. Result in (0, 1)
+    # Sigmoid the  centre_X, centre_Y. and object confidence. Result is normalized into (0, 1)
     prediction[:, :, 0] = torch.sigmoid(prediction[:, :, 0])
     prediction[:, :, 1] = torch.sigmoid(prediction[:, :, 1])
     prediction[:, :, 4] = torch.sigmoid(prediction[:, :, 4])
@@ -66,12 +67,12 @@ def predict_transform(prediction, inp_dim, anchors, num_classes, CUDA=True):
 
     anchors = anchors.repeat(grid_size * grid_size, 1).unsqueeze(0)
     # log space transform height and the width
-    prediction[:, :, 2:4] = torch.exp(prediction[:, :, 2:4]) * anchors  # Get positive w & h and more non-linearization
+    prediction[:, :, 2:4] = torch.exp(prediction[:, :, 2:4]) * anchors  # Get positive w & h via exponential
 
     # Sigmoid the class scores
     prediction[:, :, 5: 5 + num_classes] = torch.sigmoid((prediction[:, :, 5: 5 + num_classes]))
 
-    prediction[:, :, :4] *= stride  # todo Why multiplication? Why not stride*stride but stride?
+    prediction[:, :, :4] *= stride  # todo Why multiplication by stride?
 
     return prediction
 
