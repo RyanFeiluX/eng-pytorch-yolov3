@@ -28,7 +28,7 @@ def convert2cpu(matrix):
 def predict_transform(prediction, inp_dim, anchors, num_classes, CUDA=True):
     batch_size = prediction.size(0)
     stride = inp_dim // prediction.size(2)
-    grid_size = inp_dim // stride
+    grid_size = inp_dim // stride  # How about directly getting the same from prediction.size(-1)?
     bbox_attrs = 5 + num_classes
     num_anchors = len(anchors)
 
@@ -38,10 +38,11 @@ def predict_transform(prediction, inp_dim, anchors, num_classes, CUDA=True):
     prediction = prediction.transpose(1, 2).contiguous()
     prediction = prediction.view(batch_size, grid_size * grid_size * num_anchors, bbox_attrs)
 
-    #Sigmoid the  centre_X, centre_Y. and object confidencce
+    #Sigmoid the  centre_X, centre_Y. and object confidencce. Result in (0, 1)
     prediction[:, :, 0] = torch.sigmoid(prediction[:, :, 0])
     prediction[:, :, 1] = torch.sigmoid(prediction[:, :, 1])
     prediction[:, :, 4] = torch.sigmoid(prediction[:, :, 4])
+    # Equivalent: prediction[:, :, (0,1,4)] = torch.sigmoid(prediction[:, :, (0,1,4)])
 
     #Add the center offsets
     grid_len = np.arange(grid_size)
@@ -58,19 +59,19 @@ def predict_transform(prediction, inp_dim, anchors, num_classes, CUDA=True):
 
     prediction[:, :, :2] += x_y_offset
 
-    #log space transform height and the width
     anchors = torch.FloatTensor(anchors)
 
     if CUDA:
         anchors = anchors.cuda()
 
     anchors = anchors.repeat(grid_size * grid_size, 1).unsqueeze(0)
-    prediction[:, :, 2:4] = torch.exp(prediction[:, :, 2:4]) * anchors
+    # log space transform height and the width
+    prediction[:, :, 2:4] = torch.exp(prediction[:, :, 2:4]) * anchors  # Get positive w & h and more non-linearization
 
-    #Softmax the class scores
+    # Sigmoid the class scores
     prediction[:, :, 5: 5 + num_classes] = torch.sigmoid((prediction[:, :, 5: 5 + num_classes]))
 
-    prediction[:, :, :4] *= stride
+    prediction[:, :, :4] *= stride  # todo Why multiplication? Why not stride*stride but stride?
 
     return prediction
 
