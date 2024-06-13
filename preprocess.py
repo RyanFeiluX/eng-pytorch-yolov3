@@ -72,6 +72,6 @@ def inp_to_image(inp):
 
 
 def get_weight_config(weight_config: str) -> tuple:
-    fn_weight = os.path.join('models', weight_config + '.weights')
-    fn_config = os.path.join('cfg', weight_config + '.cfg')
+    fn_weight = os.path.join('models', weight_config + '.weights') if weight_config else None
+    fn_config = os.path.join('cfg', weight_config + '.cfg') if weight_config else None
     return fn_weight, fn_config
