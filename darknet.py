@@ -281,7 +281,8 @@ def create_modules(blocks):
             mask = x["mask"].split(",")
             mask = [int(x) for x in mask]
 
-            anchors = x["anchors"].split(",")
+            # anchors = x["anchors"].split(",")
+            anchors = net_info["anchors"].split(",")
             anchors = [int(a) for a in anchors]
             anchors = [(anchors[i], anchors[i + 1]) for i in range(0, len(anchors), 2)]
             anchors = [anchors[i] for i in mask]
@@ -373,12 +374,18 @@ class Darknet(nn.Module):
                 #Output the result
                 x = x.data
                 # x shape: B size * (bbox attributions                 * anchor#) * grid size * grid size
-                #          B size * ((bbox coord, confidence, classes) * anchor#) * gridsize * gridsize
-                # example: 1      * ((4         + 1         + 80     ) * 80     ) * 13       * 13
+                #          B size * ((bbox coord, confidence, classes) * anchor#) * grid size * grid size
+                # example: 1      * ((4         + 1         + 80     ) * 80     ) * 13        * 13
                 x = predict_transform(x, inp_dim, anchors, num_classes, CUDA)
 
                 if type(x) is int:  # What about chance to get a integer x?
                     continue
+
+                headshape = list(x.shape)
+                headshape[-1] = 1
+                head_ = torch.ones(headshape).to(x.device)
+                head_[..., 0] = int(int(modules[i]["head"]))
+                x = torch.cat((x, head_), -1)
 
                 # Concatenate predictions from 3 scales of feature maps.
                 # This step can be another route layer if each yolo layer keeps its prediction in outputs.

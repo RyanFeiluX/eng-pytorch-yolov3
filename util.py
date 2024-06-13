@@ -109,7 +109,7 @@ def write_results(prediction, confidence, nms=True, nms_conf=0.4):
     prediction = prediction * conf_mask  # Binarize prediction result
 
     # IMPROVEMENT Calculate num_classes from prediction instead of num_classes argument
-    num_classes = prediction.size(2) - 5
+    num_classes = prediction.size(2) - 6
 
     try:
         # Get all bboxes with non-zero confidence. The bboxes are represented as a 2-dim matrix, B * bbox index.
@@ -142,27 +142,28 @@ def write_results(prediction, confidence, nms=True, nms_conf=0.4):
         max_conf, max_conf_score = torch.max(prediction[ind][:, 5:5 + num_classes], 1)
         max_conf = max_conf.float().unsqueeze(1)
         max_conf_score = max_conf_score.float().unsqueeze(1)
-        seq = (image_pred[:, :5], max_conf, max_conf_score)
+        seq = (image_pred[:, :5], max_conf, max_conf_score, prediction[ind][:, -1].unsqueeze(-1))
         image_pred = torch.cat(seq, 1)
+        vectorsize = image_pred.size(-1)
 
-        # Get rid of the zero entries
+        # Get rid of the zero-confidence entries
         non_zero_ind = (torch.nonzero(image_pred[:, 4]))  # Equivalent: ind_nz[1].unsqueeze(1)
 
-        image_pred_ = image_pred[non_zero_ind.squeeze(), :].view(-1, 7)
+        image_pred_ = image_pred[non_zero_ind.squeeze(), :].view(-1, vectorsize)
 
         # Get the various classes detected in the image
         try:
-            img_classes = unique(image_pred_[:, -1])  # class index in last position
+            img_classes = unique(image_pred_[:, -2])  # class index in last position
         except Exception as e:
             print('Exception in calling unique(): %s' % repr(e), flush=True)
             continue
         # WE will do NMS classwise
         for cls in img_classes:
             # get the detections with one particular class
-            cls_mask = image_pred_ * (image_pred_[:, -1] == cls).float().unsqueeze(1)
+            cls_mask = image_pred_ * (image_pred_[:, -2] == cls).float().unsqueeze(1)
             class_mask_ind = torch.nonzero(cls_mask[:, -2]).squeeze()  # Slice class prob
 
-            image_pred_class = image_pred_[class_mask_ind, :].view(-1, 7)
+            image_pred_class = image_pred_[class_mask_ind, :].view(-1, vectorsize)
 
             # sort the detections such that the entry with the maximum objectiveness
             # confidence is at the top
@@ -191,7 +192,7 @@ def write_results(prediction, confidence, nms=True, nms_conf=0.4):
 
                     # Keep the non-zero entries following existing entries in image_pred_class in dim=0
                     non_zero_ind = torch.nonzero(image_pred_class[:, 4]).squeeze()
-                    image_pred_class = image_pred_class[non_zero_ind].view(-1, 7)
+                    image_pred_class = image_pred_class[non_zero_ind].view(-1, vectorsize)
 
             # Concatenate the batch_id of the image to the detection
             # this helps us identify which image does the detection correspond to

@@ -88,6 +88,7 @@ if __name__ == '__main__':
     start = 0
 
     CUDA = torch.cuda.is_available()
+    device = 'cuda' if CUDA else 'cpu'
 
     num_classes = 80
     classes = load_classes('data/coco.names')
@@ -95,7 +96,7 @@ if __name__ == '__main__':
     # Set up the neural network
     print("Loading network.....")
     weightsfile, cfgfile = get_weight_config(args.pretrained_model)
-    model = Darknet(cfgfile)
+    model = Darknet(cfgfile).to(device)
     model.load_weights(weightsfile)
     print("Network successfully loaded")
 
@@ -104,9 +105,9 @@ if __name__ == '__main__':
     assert inp_dim % 32 == 0
     assert inp_dim > 32
 
-    # If there's a GPU available, put the model on GPU
-    if CUDA:
-        model.cuda()
+    # # If there's a GPU available, put the model on GPU
+    # if CUDA:
+    #     model.cuda()
 
     # Set the model in evaluation mode
     model.eval()
@@ -155,6 +156,9 @@ if __name__ == '__main__':
     write = False
     # model(get_test_input(inp_dim, CUDA), CUDA)
 
+    anchors = model.net_info["anchors"].split(",")
+    anchors = [(int(anchors[i]), int(anchors[i + 1])) for i in range(0, len(anchors), 2)]
+
     start_det_loop = time.time()
 
     output = None
@@ -172,11 +176,11 @@ if __name__ == '__main__':
         # B x (bbox cord x no. of anchors) x grid_w x grid_h --> B x bbox x (all the boxes) 
         # Put every proposed box as a row.
         with torch.no_grad():
-            prediction = model(Variable(batch), CUDA)
+            prediction = model(batch, CUDA)
             # prediction: batch size * bboxes of all anchors & all scales      * (bbox coord, confidence, classes)
             #             1          * 10647                                   * 85
             # detail:     batch size * anchors of 3 scales * bboxes per anchor * (bbox coord, confidence, classes)
-            #             1          * (13*13+26*26+52*52) * 3                 * (4+1+80)
+            #             1          * (13*13+26*26+52*52) * 3                 * (4         + 1         + 80     )
 
         # get the boxes with object confidence > threshold
         # Convert the coordinates to absolute coordinates
@@ -187,6 +191,10 @@ if __name__ == '__main__':
         # loops are slower than vectorised operations.
 
         prediction = write_results(prediction, confidence, nms=True, nms_conf=nms_thresh)
+        # prediction: batch size * bboxes of all anchors & all scales      * (bbox coord, confidence, classes, head)
+        #             n          * 10647                                   * 86
+        # detail:     batch size * anchors of 3 scales * bboxes per anchor * (bbox coord, confidence, classes, head)
+        #             n          * (13*13+26*26+52*52) * 3                 * (4         + 1         + 80     + 1   )
 
         end = time.time()
 
@@ -217,7 +225,7 @@ if __name__ == '__main__':
 
         for im_num, image in enumerate(imlist[idx * batch_size: min((idx + 1) * batch_size, len(imlist))]):
             im_id = idx * batch_size + im_num
-            objs = [classes[int(x[-1])] for x in output if int(x[0]) == im_id]
+            objs = [classes[int(x[-2])] for x in output if int(x[0]) == im_id]
             print("{0:20s} predicted in {1:6.3f} seconds".format(os.path.basename(image),
                                                                  (end - start) / batch_size))
             print("{0:20s} {1:s}".format("Objects Detected:", ", ".join(objs)))
@@ -245,9 +253,9 @@ if __name__ == '__main__':
     for idx in range(output.shape[0]):
         # Forced type cast for green code inspection
         output[idx, [1, 3]] = torch.clamp(output[idx, [1, 3]],
-                                          torch.Tensor([0.0]).to('cuda' if CUDA else 'cpu'), im_dim_list[idx, 0])
+                                          torch.Tensor([0.0]).to(device), im_dim_list[idx, 0])
         output[idx, [2, 4]] = torch.clamp(output[idx, [2, 4]],
-                                          torch.Tensor([0.0]).to('cuda' if CUDA else 'cpu'), im_dim_list[idx, 1])
+                                          torch.Tensor([0.0]).to(device), im_dim_list[idx, 1])
 
     output_recast = time.time()
 
@@ -262,7 +270,7 @@ if __name__ == '__main__':
         c1 = tuple(x[1:3].int()) if not CUDA else tuple(x[1:3].cpu().int().numpy())
         c2 = tuple(x[3:5].int()) if not CUDA else tuple(x[3:5].cpu().int().numpy())
         img = results[int(x[0])]
-        cls = int(x[-1])
+        cls = int(x[-2])
         label = "{0}".format(classes[cls])
         color = random.choice(colors)
         cv2.rectangle(img, c1, c2, color, thickness=2)
