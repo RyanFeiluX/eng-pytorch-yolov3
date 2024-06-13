@@ -85,7 +85,7 @@ def bbox_iou(box1, box2):
     b2_area = (b2_x2 - b2_x1 + 1)*(b2_y2 - b2_y1 + 1)
     union_area = b1_area + b2_area - inter_area
 
-    iou = inter_area / union_area
+    iou = inter_area / (union_area + 1e-6)
     
     return iou
 
