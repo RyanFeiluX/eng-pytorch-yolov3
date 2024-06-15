@@ -27,7 +27,7 @@ def letterbox_image(img, inp_dim):
     return canvas
 
 
-def prep_image(img, inp_dim):
+def prep_image(img, inp_dim, imgpath=None):
     """
     Prepare image for inputting to the neural network. 
     
@@ -35,11 +35,14 @@ def prep_image(img, inp_dim):
     """
 
     orig_im = img  # cv2.imread(img)
-    dim = orig_im.shape[1], orig_im.shape[0]
+    dim = orig_im.shape[1], orig_im.shape[0]  # hw->wh
     img = (letterbox_image(orig_im, (inp_dim, inp_dim)))
     img_ = img[:, :, ::-1].transpose((2, 0, 1)).copy()
     img_ = torch.from_numpy(img_).float().div(255.0).unsqueeze(0)
-    return img_, orig_im, dim
+    if imgpath:
+        return img_, orig_im, dim, imgpath, (inp_dim/dim[0], inp_dim/dim[1])
+    else:
+        return img_, orig_im, dim
 
 
 def read_image(imgfile):
