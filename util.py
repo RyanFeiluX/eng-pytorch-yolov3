@@ -72,7 +72,7 @@ def predict_transform(prediction, inp_dim, anchors, num_classes, CUDA=True):
     # Sigmoid the class scores
     prediction[:, :, 5: 5 + num_classes] = torch.sigmoid((prediction[:, :, 5: 5 + num_classes]))
 
-    prediction[:, :, :4] *= stride  # todo Why multiplication by stride?
+    prediction[:, :, :4] *= stride  # The multiplication by stride map bboxes to original image
 
     return prediction
 
