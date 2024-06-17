@@ -1,5 +1,6 @@
 from __future__ import division
 
+import json
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
@@ -32,7 +33,7 @@ def get_test_input():
     img_ = img[:, :, ::-1].transpose((2, 0, 1))
     img_ = img_[np.newaxis, :, :, :] / 255.0
     img_ = torch.from_numpy(img_).float()
-    img_ = Variable(img_)
+    # img_ = Variable(img_)
     return img_
 
 
@@ -183,7 +184,10 @@ def create_modules(blocks):
                 batch_normalize = 0
                 bias = True
 
-            filters = int(x["filters"])
+            if 'toyolo' in x.keys() and x['toyolo'] == '1':
+                filters = (int(net_info['classes']) + 5) * 3
+            else:
+                filters = int(x["filters"])
             padding = int(x["pad"])
             kernel_size = int(x["size"])
             stride = int(x["stride"])
@@ -276,10 +280,21 @@ def create_modules(blocks):
 
             module.add_module("avgpool_{}".format(index), avgpool)
 
-        #Yolo is the detection layer
+        # Yolo is the detection layer
         elif x["type"] == "yolo":
             mask = x["mask"].split(",")
             mask = [int(x) for x in mask]
+            if 'head_anchor' in net_info.keys():
+                hamaps = json.loads(net_info['head_anchor']) if len(net_info['head_anchor']) > 0 else []
+                hamaps.append({'head': int(x["head"]), 'mask': mask, 'grids': int(x["grids"])})
+            else:
+                hamaps = [{'head': int(x["head"]), 'mask': mask, 'grids': int(x["grids"])}]
+            net_info['head_anchor'] = json.dumps(hamaps)
+            if 'truth_thresh' in net_info.keys():
+                net_info['truth_thresh'].append(
+                    {'head': int(x['head']), 'truth_thresh': int(x['truth_thresh'])})
+            else:
+                net_info.update({'truth_thresh': [{'head': int(x['head']), 'truth_thresh': int(x['truth_thresh'])}]})
 
             # anchors = x["anchors"].split(",")
             anchors = net_info["anchors"].split(",")
@@ -314,7 +329,7 @@ class Darknet(nn.Module):
         super(Darknet, self).__init__()
         self.blocks = parse_cfg(cfgfile)
         self.net_info, self.module_list = create_modules(self.blocks)
-        self.header = torch.IntTensor([0, 0, 0, 0])
+        self.header = torch.IntTensor([0, 0, 0, 0, 0])
         self.seen = 0
 
     def get_blocks(self):
@@ -369,23 +384,31 @@ class Darknet(nn.Module):
                 inp_dim = int(self.net_info["height"])
 
                 #Get the number of classes
-                num_classes = int(modules[i]["classes"])
+                num_classes = int(self.net_info["classes"])
 
                 #Output the result
-                x = x.data
+                # x = x.data
                 # x shape: B size * (bbox attributions                 * anchor#) * grid size * grid size
                 #          B size * ((bbox coord, confidence, classes) * anchor#) * grid size * grid size
-                # example: 1      * ((4         + 1         + 80     ) * 80     ) * 13        * 13
+                # example: 2      * ((4         + 1         + 80     ) * 3      ) * 13        * 13
+                #          2      * 255                                           * 13        * 13
                 x = predict_transform(x, inp_dim, anchors, num_classes, CUDA)
+                # x shape: B size * (anchor# * grid size * grid size) * bbox attributions
+                # example: 2      * 507                               * 85
+                #                   3 x 13 x 13
 
                 if type(x) is int:  # What about chance to get a integer x?
                     continue
 
+                # Append heads to bbox attributions
                 headshape = list(x.shape)
                 headshape[-1] = 1
-                head_ = torch.ones(headshape).to(x.device)
-                head_[..., 0] = int(int(modules[i]["head"]))
+                head_ = x[..., 0].clone()[..., None].detach().to(x.device)
+                head_[..., 0] = int(modules[i]["head"])
                 x = torch.cat((x, head_), -1)
+                err_head = x[..., -1] != int(modules[i]["head"])
+                if True in err_head.flatten():
+                    print("Internal error. Invalid head info")
 
                 # Concatenate predictions from 3 scales of feature maps.
                 # This step can be another route layer if each yolo layer keeps its prediction in outputs.
@@ -432,6 +455,7 @@ class Darknet(nn.Module):
             module_type = self.blocks[i + 1]["type"]
 
             if module_type == "convolutional":
+                start = ptr
                 model = self.module_list[i]
                 try:
                     batch_normalize = int(self.blocks[i + 1]["batch_normalize"])
@@ -440,8 +464,9 @@ class Darknet(nn.Module):
 
                 conv = model[0]
 
+                anchor = conv
                 if (batch_normalize):
-                    bn = model[1]
+                    anchor = bn = model[1]
 
                     #Get the number of weights of Batch Norm Layer
                     num_bn_biases = bn.bias.numel()
@@ -492,6 +517,15 @@ class Darknet(nn.Module):
                 conv_weights = torch.from_numpy(weights[ptr:ptr + num_weights])
                 ptr = ptr + num_weights
 
+                end = ptr
+                msize = end-start
+                print('Load %s_%d: %d' % (module_type, i, msize), flush=True)
+                if conv_weights.view(-1).shape[0] != conv.weight.data.view(-1).shape[0]:
+                    print('Detect anomaly weight length: %d' % ptr)
+
+                assert conv_weights.view(-1).shape[0] == conv.weight.data.view(-1).shape[0], (
+                    "Internal error: Anomaly %s weights amount." % module_type,
+                    conv_weights.shape, conv.weight.data.shape)
                 conv_weights = conv_weights.view_as(conv.weight.data)
                 conv.weight.data.copy_(conv_weights)
 
@@ -514,7 +548,10 @@ class Darknet(nn.Module):
             module_type = self.blocks[i + 1]["type"]
 
             if (module_type) == "convolutional":
+                start = fp.tell()
+
                 model = self.module_list[i]
+                # model: conv + BN + leaky
                 try:
                     batch_normalize = int(self.blocks[i + 1]["batch_normalize"])
                 except:
@@ -522,8 +559,9 @@ class Darknet(nn.Module):
 
                 conv = model[0]
 
+                anchor = conv
                 if (batch_normalize):
-                    bn = model[1]
+                    anchor = bn = model[1]
 
                     #If the parameters are on GPU, convert them back to CPU
                     #We don't convert the parameter to GPU
@@ -540,4 +578,9 @@ class Darknet(nn.Module):
 
                 #Let us save the weights for the Convolutional layers
                 cpu(conv.weight.data).numpy().tofile(fp)
+
+                end = fp.tell()
+                msize = end-start
+                print('Save %s_%d: %d' % (module_type, i, msize), flush=True)
+                assert msize % 2 == 0, "Unaligned weight length"
 
