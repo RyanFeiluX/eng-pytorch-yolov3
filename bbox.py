@@ -59,7 +59,7 @@ def unify_boxcoords(box):
     return box
 
 
-def bbox_iou(box1, box2, CIoU=True):
+def bbox_iou(box1, box2):
     """
     Returns the IoU of two bounding boxes 
     """
