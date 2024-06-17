@@ -63,8 +63,8 @@ def arg_parse():
     parser.add_argument("--confidence", dest="confidence",
                         help="Object Confidence to filter predictions",
                         default=0.5)
-    parser.add_argument("--nms_thresh", dest="nms_thresh", help="NMS Threshhold", default=0.4)
-    parser.add_argument("--pt_model", dest='pretrained_model', help="pretrained_model",
+    parser.add_argument("--nms-thresh", dest="nms_thresh", help="NMS Threshhold", default=0.4)
+    parser.add_argument("--pt-model", dest='pretrained_model', help="pretrained_model",
                         default="yolov3", type=str)
     parser.add_argument("--reso", dest='reso',
                         help="Input resolution of the network. Increase to increase accuracy. "
@@ -90,7 +90,6 @@ if __name__ == '__main__':
     CUDA = torch.cuda.is_available()
     device = 'cuda' if CUDA else 'cpu'
 
-    num_classes = 80
     classes = load_classes('data/coco.names')
 
     # Set up the neural network
@@ -177,10 +176,11 @@ if __name__ == '__main__':
         # Put every proposed box as a row.
         with torch.no_grad():
             prediction = model(batch, CUDA)
-            # prediction: batch size * bboxes of all anchors & all scales      * (bbox coord, confidence, classes)
-            #             1          * 10647                                   * 85
-            # detail:     batch size * anchors of 3 scales * bboxes per anchor * (bbox coord, confidence, classes)
-            #             1          * (13*13+26*26+52*52) * 3                 * (4         + 1         + 80     )
+            # prediction: batch size * bboxes of all heads          * (bbox coord, confidence, classes，head)
+            #             n          * 10647                        * 86
+            # detail:     batch size * anchors of 3 heads * anchor# * (bbox coord, confidence, classes, head)
+            #             n          * (13*13+26*26+52*52) * 3      * (4         + 1         + 80     + 1   )
+            # example:    2          * 10647                        * 86
 
         # get the boxes with object confidence > threshold
         # Convert the coordinates to absolute coordinates
@@ -191,10 +191,10 @@ if __name__ == '__main__':
         # loops are slower than vectorised operations.
 
         prediction = write_results(prediction, confidence, nms=True, nms_conf=nms_thresh)
-        # prediction: batch size * bboxes of all anchors & all scales      * (bbox coord, confidence, classes, head)
-        #             n          * 10647                                   * 86
-        # detail:     batch size * anchors of 3 scales * bboxes per anchor * (bbox coord, confidence, classes, head)
-        #             n          * (13*13+26*26+52*52) * 3                 * (4         + 1         + 80     + 1   )
+        # prediction: B * anchor boxes of all heads * (img id, bbox coord, confidence, class score, class id, head)
+        # detail:     B * anchor boxes of 3 heads   * (img id, bbox coord, confidence, class score, class id, head)
+        #             n * (13*13+26*26+52*52) * 3   * (1     + 4         + 1         + 1          + 1       + 1   )
+        # example:    2 * 10647                     * 9
 
         end = time.time()
 
