@@ -243,7 +243,7 @@ class LossCalculator:
                     continue
                 if len(ind_nz) not in [507, 2028, 8112]:
                     print("Internal error. Illegal tensor size: %d" % len(ind_nz))
-                b0 = (prediction[ind_nz, :-1])
+                b0 = (prediction[ind_nz, :-1]).clone()
                 b1 = b0.view(1, num_anchors, self.gridsizes[head], self.gridsizes[head], vectorsize - 1)
                 if head < len(p):
                     p[head] = torch.cat((p[head], b1), 0)
