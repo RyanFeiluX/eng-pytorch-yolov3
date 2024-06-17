@@ -75,11 +75,11 @@ if __name__ == '__main__':
     nms_thesh = float(args.nms_thresh)
     start = 0
 
-    num_classes = 80
+    # num_classes = 80
 
     CUDA = torch.cuda.is_available()
 
-    bbox_attrs = 5 + num_classes
+    # bbox_attrs = 5 + num_classes
 
     print("Loading network.....")
     weightsfile, cfgfile = get_weight_config(args.pretrained_model)
