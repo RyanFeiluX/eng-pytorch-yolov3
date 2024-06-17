@@ -149,11 +149,11 @@ def write_results(prediction, confidence, nms=True, nms_conf=0.4):
         # Get rid of the zero-confidence entries
         non_zero_ind = (torch.nonzero(image_pred[:, 4]))  # Equivalent: ind_nz[1].unsqueeze(1)
 
-        image_pred_ = image_pred[non_zero_ind.squeeze(), :].view(-1, vectorsize)
+        image_pred_ = image_pred[non_zero_ind.squeeze(), :].view(-1, vectorsize).detach()
 
         # Get the various classes detected in the image
         try:
-            img_classes = unique(image_pred_[:, -2])  # class index in last position
+            img_classes = unique(image_pred_.detach()[:, -2])  # class index in last position
         except Exception as e:
             print('Exception in calling unique(): %s' % repr(e), flush=True)
             continue
