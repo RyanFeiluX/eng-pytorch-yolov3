@@ -40,7 +40,10 @@ def prep_image(img, inp_dim, imgpath=None):
     img_ = img[:, :, ::-1].transpose((2, 0, 1)).copy()
     img_ = torch.from_numpy(img_).float().div(255.0).unsqueeze(0)
     if imgpath:
-        return img_, orig_im, dim, imgpath, (inp_dim/dim[0], inp_dim/dim[1])
+        swh = (inp_dim/dim[0], inp_dim/dim[1])
+        m, i = min(swh), np.argmin(swh)
+        dxy = [(0, (inp_dim - dim[1] * m) / 2), ((inp_dim - dim[0] * m) / 2, 0)]
+        return img_, orig_im, dim, imgpath, m, dxy[i]
     else:
         return img_, orig_im, dim
 
