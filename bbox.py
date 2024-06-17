@@ -59,13 +59,17 @@ def unify_boxcoords(box):
     return box
 
 
-def box_iou(box1, box2, CIoU=True):
+def box_iou(box1, box2, grad_needed=False, CIoU=True):
     """
     Returns the IoU of two bounding boxes 
     """
     # Adjust box coord to upper-left point + bottom-right point
-    unify_boxcoords(box1.clone())
-    unify_boxcoords(box2.clone())
+    if grad_needed:
+        unify_boxcoords(box1.clone())
+        unify_boxcoords(box2.clone())
+    else:
+        unify_boxcoords(box1)
+        unify_boxcoords(box2)
 
     # Get the coordinates of bounding boxes
     b1_x1, b1_y1, b1_x2, b1_y2 = box1[:, 0], box1[:, 1], box1[:, 2], box1[:, 3]
