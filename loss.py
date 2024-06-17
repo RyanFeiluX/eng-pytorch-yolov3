@@ -185,7 +185,7 @@ class LossCalculator:
                 pxy = pxy.sigmoid() * 2 - 0.5
                 pwh = (pwh.sigmoid() * 2) ** 2 * anch[i]
                 pbox = torch.cat((pxy, pwh), 1)  # predicted box
-                iou = box_iou(pbox, tbox[i], CIoU=True).squeeze()  # iou(prediction, target)
+                iou = box_iou(pbox, tbox[i], grad_needed=True, CIoU=True).squeeze()  # iou(prediction, target)
                 lbox = lbox + (1.0 - iou).mean()  # iou loss
 
                 # Objectness
