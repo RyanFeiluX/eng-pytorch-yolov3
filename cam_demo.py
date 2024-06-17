@@ -64,8 +64,7 @@ def arg_parse():
 
 
 if __name__ == '__main__':
-
-    num_classes = 80
+    # torch.autograd.set_detect_anomaly(True)
 
     args = arg_parse()
     confidence = float(args.confidence)
@@ -76,11 +75,9 @@ if __name__ == '__main__':
     start = 0
     CUDA = torch.cuda.is_available()
 
-    # num_classes = 80
-    bbox_attrs = 5 + num_classes
-
     weightsfile, cfgfile = get_weight_config(args.pretrained_model)
-    model = Darknet(cfgfile)
+    with torch.no_grad():
+        model = Darknet(cfgfile)
     model.load_weights(weightsfile)
 
     model.net_info["height"] = args.reso
