@@ -75,8 +75,8 @@ if __name__ == '__main__':
     start = 0
 
     CUDA = torch.cuda.is_available()
-    num_classes = 80
-    bbox_attrs = 5 + num_classes
+    # num_classes = 80
+    # bbox_attrs = 5 + num_classes
 
     print("Loading network.....")
     weightsfile, cfgfile = get_weight_config(args.pretrained_model)
@@ -123,7 +123,7 @@ if __name__ == '__main__':
 
             with torch.no_grad():
                 output = model(Variable(img), CUDA)
-            output = write_results(output, confidence, nms=True, nms_conf=nms_thesh)
+            output = write_results(output, confidence, nms=True, nms_conf=nms_thesh).half()
 
             if type(output) is int:
                 frames += 1
