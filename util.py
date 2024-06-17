@@ -2,12 +2,12 @@ from __future__ import division
 
 import torch
 import torch.nn as nn
-import torch.nn.functional as F
+# import torch.nn.functional as F
 from torch.autograd import Variable
 import numpy as np
 import cv2
-import matplotlib.pyplot as plt
-from bbox import bbox_iou
+# import matplotlib.pyplot as plt
+from bbox import box_iou
 
 
 def count_parameters(model):
@@ -179,7 +179,7 @@ def write_results(prediction, confidence, nms=True, nms_conf=0.4):
                     # in the loop
                     try:
                         # Calculate IoU between class i and class i+1 ~ class n
-                        ious = bbox_iou(image_pred_class[i].unsqueeze(0), image_pred_class[i + 1:])
+                        ious = box_iou(image_pred_class[i].unsqueeze(0), image_pred_class[i + 1:])
                     except ValueError:
                         break
 
@@ -340,7 +340,7 @@ def write_results_half(prediction, confidence, num_classes, nms=True, nms_conf=0
                     #Get the IOUs of all boxes that come after the one we are looking at 
                     #in the loop
                     try:
-                        ious = bbox_iou(image_pred_class[i].unsqueeze(0), image_pred_class[i + 1:])
+                        ious = box_iou(image_pred_class[i].unsqueeze(0), image_pred_class[i + 1:])
                     except ValueError:
                         break
 
