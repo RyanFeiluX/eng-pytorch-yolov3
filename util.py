@@ -100,11 +100,22 @@ def unique(tensor):
 
 
 def write_results(prediction, confidence, nms=True, nms_conf=0.4):
-    # Shape of prediction: batch x bbox x (bbox coord + confidence + classes)
-    # Pattern in last dimension of prediction: cx,cy,w,h,confidence,classes(x80).
-    # Extract first two dims via slicing confidence in last dim.
-    # unsqueeze to add 2nd dim which was suppressed during slicing
+    """
+
+    @param prediction: batch size * bboxes of all heads          * (bbox coord, confidence, classes，head)
+                       n          * 10647                        * 86
+           detail:     batch size * anchors of 3 heads * anchor# * (bbox coord, confidence, classes, head)
+                       n          * (13*13+26*26+52*52) * 3      * (4         + 1         + 80     + 1   )
+           bbox coord pattern: cx,cy,w,h,confidence,classes(x Nc),head
+    @param confidence:
+    @param nms:
+    @param nms_conf:
+    @return:
+    """
+    # Mask confidence matrix via filtering confidence in last dimension.
+    # Call unsqueeze(2) to add dim-2 which was suppressed during filtering.
     conf_mask = (prediction[:, :, 4] > confidence).float().unsqueeze(2)
+    # conf_mask shape: Bsize x total of all bboxes x 1
     # equivalent: (prediction.select(2,4) > confidence).float().unsqueeze(-1)
     prediction = prediction * conf_mask  # Binarize prediction result
 
@@ -112,8 +123,8 @@ def write_results(prediction, confidence, nms=True, nms_conf=0.4):
     num_classes = prediction.size(2) - 6
 
     try:
-        # Get all bboxes with non-zero confidence. The bboxes are represented as a 2-dim matrix, B * bbox index.
-        # Then transpose the matrix to get dimension: bbox index * B
+        # Extract the indices of all bboxes with non-zero confidence. The bboxes are represented as a 2-D matrix,
+        # shaped as B * bbox index. Then transpose the matrix to get dimension: bbox index * B
         ind_nz = torch.nonzero(prediction[:, :, 4]).transpose(0, 1).contiguous()
     except Exception as e:
         print('Exception in calling torch.nonzero(): %s' % repr(e), flush=True)
@@ -133,40 +144,46 @@ def write_results(prediction, confidence, nms=True, nms_conf=0.4):
     write = False
 
     for ind in range(batch_size):
-        # select the image from the batch
-        image_pred = prediction[ind][:, :7]
+        # Select the images from the batch without any classification info.
+        # image_pred shape: total of all bboxes x 5 (bbox coord, confidence)
+        image_pred = prediction[ind][:, :5]
 
-        # Get the class having maximum score, and the index of that class
-        # Get rid of num_classes softmax scores
-        # Add the class index and the class score of class having maximum score
-        max_conf, max_conf_score = torch.max(prediction[ind][:, 5:5 + num_classes], 1)
-        max_conf = max_conf.float().unsqueeze(1)
-        max_conf_score = max_conf_score.float().unsqueeze(1)
-        seq = (image_pred[:, :5], max_conf, max_conf_score, prediction[ind][:, -1].unsqueeze(-1))
+        # Extract the classes having maximum score at a grid cell, and the indices of that classes.
+        # Add the class scores and the class indices of the classes having maximum score to image_pred.
+        max_cls_score, max_cls_index = torch.max(prediction[ind][:, 5:5 + num_classes], 1)
+        max_cls_score = max_cls_score.float().unsqueeze(1)
+        max_cls_index = max_cls_index.float().unsqueeze(1)
+        seq = (image_pred[:, :5], max_cls_score, max_cls_index, prediction[ind][:, -2:])
         image_pred = torch.cat(seq, 1)
+        # image_pred shape: total of all bboxes x vector size
+        # vector pattern: bbox coord, confidence, class score, class index, head, image id
+        #              9:     4            1           1             1        1       1
         vectorsize = image_pred.size(-1)
 
         # Get rid of the zero-confidence entries
-        non_zero_ind = (torch.nonzero(image_pred[:, 4]))  # Equivalent: ind_nz[1].unsqueeze(1)
+        non_zero_ind = (torch.nonzero(image_pred[:, 4]))
 
         image_pred_ = image_pred[non_zero_ind.squeeze(), :].view(-1, vectorsize).detach()
+        # image_pred_ shape: total of all bboxes w/ non-zero confidences x vector size
 
         # Get the various classes detected in the image
         try:
-            img_classes = unique(image_pred_.detach()[:, -2])  # class index in last position
+            img_classes = unique(image_pred_.detach()[:, -3])  # class index position -3
         except Exception as e:
             print('Exception in calling unique(): %s' % repr(e), flush=True)
             continue
         # WE will do NMS classwise
         for cls in img_classes:
-            # get the detections with one particular class
-            cls_mask = image_pred_ * (image_pred_[:, -2] == cls).float().unsqueeze(1)
-            class_mask_ind = torch.nonzero(cls_mask[:, -2]).squeeze()  # Slice class prob
+            # get the detections with one particular class. Note: class index position is -3
+            cls_mask = image_pred_ * (image_pred_[:, -3] == cls).float().unsqueeze(1)
+            # cls_mask shape: (# of vectors with valid class scores) x (vector size)
+            # Note for cla_mask: all zeros for the vectors with class <> cls
+            class_mask_ind = torch.nonzero(cls_mask[:, 4]).squeeze()  # Slice objectiveness/confidence
 
             image_pred_class = image_pred_[class_mask_ind, :].view(-1, vectorsize)
 
-            # sort the detections such that the entry with the maximum objectiveness
-            # confidence is at the top
+            # sort the detections such that the entry with the maximum objectiveness/confidence
+            #  is at the top
             conf_sort_index = torch.sort(image_pred_class[:, 4], descending=True)[1]  # [1] indicates index part
             image_pred_class = image_pred_class[conf_sort_index]
             clscnt = image_pred_class.size(0)
@@ -190,7 +207,7 @@ def write_results(prediction, confidence, nms=True, nms_conf=0.4):
                     iou_mask = (ious < nms_conf).float().unsqueeze(1)
                     image_pred_class[i + 1:] *= iou_mask
 
-                    # Keep the non-zero entries following existing entries in image_pred_class in dim=0
+                    # Keep the non-zero entries following existing entries in image_pred_class in dim-0
                     non_zero_ind = torch.nonzero(image_pred_class[:, 4]).squeeze()
                     image_pred_class = image_pred_class[non_zero_ind].view(-1, vectorsize)
 
@@ -199,7 +216,9 @@ def write_results(prediction, confidence, nms=True, nms_conf=0.4):
             # We use a linear structure to hold ALL the detections from the batch
             # the batch_dim is flattened
             # batch is identified by extra batch column
-
+            # image_pred_class shape: (# of eligible bboxes) x (vector size)
+            # vector pattern: bbox coord, confidence, class score, class index, head, image id
+            #              9:     4            1           1             1        1       1
             img_ind = image_pred_class.new(image_pred_class.size(0), 1).fill_(ind)
             seq = img_ind, image_pred_class
             # output entry pattern: img_id,x1,y1,x2,y2,confidence,class-prob,class-index
@@ -209,8 +228,10 @@ def write_results(prediction, confidence, nms=True, nms_conf=0.4):
             else:
                 out = torch.cat(seq, 1)
                 output = torch.cat((output, out))
-
-    return output if write else 0
+            # output shape: (# of eligible bboxes) x (new vector size)
+            # vector pattern: image id, bbox coord, confidence, class score, class index, head, image id
+            #             10:    1         4            1           1             1        1       1
+    return output[..., :-1] if write else 0
 
 
 #!/usr/bin/env python3
