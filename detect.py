@@ -195,6 +195,7 @@ if __name__ == '__main__':
         # detail:     B * anchor boxes of 3 heads   * (img id, bbox coord, confidence, class score, class id, head)
         #             n * (13*13+26*26+52*52) * 3   * (1     + 4         + 1         + 1          + 1       + 1   )
         # example:    2 * 10647                     * 9
+        # Note: bbox coord in NN model space
 
         end = time.time()
 
@@ -246,9 +247,11 @@ if __name__ == '__main__':
 
     scaling_factor = torch.min(inp_dim / im_dim_list, 1)[0].view(-1, 1)
 
+    # Remove padding area from NN model space added during preprocessing.
     output[:, [1, 3]] -= (inp_dim - scaling_factor * im_dim_list[:, 0].view(-1, 1)) / 2
     output[:, [2, 4]] -= (inp_dim - scaling_factor * im_dim_list[:, 1].view(-1, 1)) / 2
 
+    # Transform bboxes coordinates from NN model space from real space.
     output[:, 1:5] /= scaling_factor
 
     for idx in range(output.shape[0]):
