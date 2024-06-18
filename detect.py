@@ -225,6 +225,7 @@ if __name__ == '__main__':
 
         for im_num, image in enumerate(imlist[idx * batch_size: min((idx + 1) * batch_size, len(imlist))]):
             im_id = idx * batch_size + im_num
+            # class index position in vector: -2
             objs = [classes[int(x[-2])] for x in output if int(x[0]) == im_id]
             print("{0:20s} predicted in {1:6.3f} seconds".format(os.path.basename(image),
                                                                  (end - start) / batch_size))
