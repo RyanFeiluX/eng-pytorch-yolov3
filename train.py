@@ -22,7 +22,16 @@ from loss import LossCalculator
 from torch.optim import lr_scheduler
 
 
-def load_gtboxes(batch, scale=None, move=None):
+def load_gtboxes(batch, inp_dim, scale=None, move=None):
+    """
+    Load GT boxes
+    @param batch: Image batch
+    @param inp_dim: Size of image in model space
+    @param scale: Model/real
+    @param move: Distance to move boxes for centering the boxes
+    @return: GT boxes list. pattern: img id, cls id, x1, y1, x2, y2.
+             x1, y1, x2, y2 in model space.
+    """
     labels = []
     labeldir = osp.join(osp.split(batch[0])[0], 'labeled')
     for idx, img in enumerate(batch):
@@ -42,8 +51,9 @@ def load_gtboxes(batch, scale=None, move=None):
                     coords = line_[1:]
                     coords = np.array(coords) * s
                     coords[0:2] += m
+                    coords[0:2] /= inp_dim,
                     labels.append([idx, cls_id] + coords.tolist())
-    return labels  # pattern: img id, cls id, norm_x1, norm_y1, norm_x2, norm_y2
+    return labels
 
 
 def init_weights(model):
@@ -278,7 +288,7 @@ if __name__ == '__main__':
             #     print("{0:20s} {1:s}".format("Objects Detected:", ", ".join(objs)))
             #     print("----------------------------------------------------------", flush=True)
 
-            gtboxes = load_gtboxes(pathbatch,
+            gtboxes = load_gtboxes(pathbatch, inp_dim,
                                    scale=scalebatch,
                                    move=movebatch)
             loss, loss_items = lcalc.calc_loss(prediction, gtboxes)
