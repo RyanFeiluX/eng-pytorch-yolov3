@@ -292,9 +292,9 @@ def create_modules(blocks):
             net_info['head_anchor'] = json.dumps(hamaps)
             if 'truth_thresh' in net_info.keys():
                 net_info['truth_thresh'].append(
-                    {'head': int(x['head']), 'truth_thresh': int(x['truth_thresh'])})
+                    {'head': int(x['head']), 'truth_thresh': float(x['truth_thresh'])})
             else:
-                net_info.update({'truth_thresh': [{'head': int(x['head']), 'truth_thresh': int(x['truth_thresh'])}]})
+                net_info.update({'truth_thresh': [{'head': int(x['head']), 'truth_thresh': float(x['truth_thresh'])}]})
 
             # anchors = x["anchors"].split(",")
             anchors = net_info["anchors"].split(",")
