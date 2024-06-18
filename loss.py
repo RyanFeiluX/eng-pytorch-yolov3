@@ -194,7 +194,7 @@ class LossCalculator:
                 j = iou.argsort()
                 b, a, gj, gi, iou = b[j], a[j], gj[j], gi[j], iou[j]
                 if self.gr[i] < 1:
-                    iou = (1.0 - self.gr[i]) + self.gr * iou
+                    iou = (1.0 - torch.tensor((self.gr[i]), device=self.device).repeat(iou.size(0))) + self.gr[i] * iou
                 tobj[b, a, gj, gi] = iou  # iou ratio
 
                 # Classification
