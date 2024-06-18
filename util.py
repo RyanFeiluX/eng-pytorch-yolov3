@@ -107,6 +107,7 @@ def write_results(prediction, confidence, nms=True, nms_conf=0.4):
            detail:     batch size * anchors of 3 heads * anchor# * (bbox coord, confidence, classes, head)
                        n          * (13*13+26*26+52*52) * 3      * (4         + 1         + 80     + 1   )
            bbox coord pattern: cx,cy,w,h,confidence,classes(x Nc),head
+           Note: cx, cy, w and h in NN model space.
     @param confidence:
     @param nms:
     @param nms_conf:
