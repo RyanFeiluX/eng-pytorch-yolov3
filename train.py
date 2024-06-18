@@ -200,7 +200,7 @@ if __name__ == '__main__':
         output = None
         write = False
         for idx, batch in enumerate(im_batches):
-            print('Batch: %d' % idx, flush=True)
+            # print('Batch: %d' % idx, flush=True)
 
             pathbatch = path_batches[idx]
             scalebatch = scale_batches[idx]
