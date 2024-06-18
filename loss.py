@@ -32,7 +32,7 @@ class LossCalculator:
             # a[ha['head']] = [np.array(anchors[m]) for m in ha['mask']]
         self.anchors = torch.from_numpy(np.array(a)).to(self.device)
         hyp['truth_thresh'].sort(key=lambda x: x['head'])
-        self.gr = [tt['truth_thresh'] for tt in hyp['truth_thresh']]
+        self.gr = 1.0  # [tt['truth_thresh'] for tt in hyp['truth_thresh']]
 
         # Define criteria for classification loss and confidence loss
         self.balance = [.9, .9, .9]
@@ -193,8 +193,8 @@ class LossCalculator:
                 # if self.sort_obj_iou:
                 j = iou.argsort()
                 b, a, gj, gi, iou = b[j], a[j], gj[j], gi[j], iou[j]
-                if self.gr[i] < 1:
-                    iou = (1.0 - torch.tensor((self.gr[i]), device=self.device).repeat(iou.size(0))) + self.gr[i] * iou
+                if self.gr < 1:
+                    iou = (1.0 - torch.tensor(self.gr, device=self.device).repeat(iou.size(0))) + self.gr * iou
                 tobj[b, a, gj, gi] = iou  # iou ratio
 
                 # Classification
@@ -225,6 +225,7 @@ class LossCalculator:
         # gtboxes: list of GT per image. n x 6
         #   item as list: img id in the batch, class id, cx,    cy,    w,     h
         #   example:           0                 3       0.1    0.2    1.5    0.6
+        # Note: bbox coord in NN model space.
 
         # *** Organize argument p ***
         vectorsize = predictions.size(-1)
