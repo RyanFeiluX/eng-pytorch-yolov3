@@ -45,16 +45,18 @@ class LossCalculator:
 
     def build_targets(self, predictions, targets):
         """
-        Prepares model targets from input targets (image,class,x,y,w,h) for loss computation, returning class, box,
+        Prepares model targets from input targets (image,class,cx,cy,w,h) for loss computation, returning class, box,
         indices, and anchors.
         @param predictions: list of feature map, dtype=tensor
            item shape: Bsize x anchor#/point of current scale x grid size x grid size x bbox attr
            example:    2     x 3                              x 13        x 13          85
                        2 x 3 x 13 x 13 x 85
+           Note: coord is in NN model space
         @param targets: tensor
            shape:   GT box# of current batch x (img id of batch, class id, coord(cx,cy,w,h))
            example: 5                        x (1              + 1       + 4               )
                     5 x 6
+           Note: coord is in NN model space
         @return: class, box, indices, and anchors.
         """
 
@@ -62,14 +64,14 @@ class LossCalculator:
         # Nt: Num of ground truth objects. It is from training dataset.
         na, nt = self.num_abox, targets.shape[0]  # number of anchors, targets
         tcls, tbox, indices, anch = [], [], [], []
-        # gain is used to map targets([na,nt,7]) from normalized xywh to corresponding feature map scale
+        # gain is used to map targets([na,nt,7]) from 1 to corresponding feature map scale
         # 7: Composed of image_index + class + xywh + anchor_index
         #                     1          1      4         1
         gain = torch.ones(7, device=self.device)  # normalized to gridspace gain
         # aidx for late use，bbox - anchor box mapping. Shape: Na x Nt
         aidx = (torch.arange(na, device=self.device)
                 .float().view(na, 1).repeat(1, nt))  # same as .repeat_interleave(nt)
-        # Repeat targets up to the num of anchors of current feature map. As a result, each bbox changes to 3 times.
+        # Repeat targets up to the num of anchors of current feature map. As a result, each bbox is copied by 3 times.
         # It reaches 1-1 mapping b/w GT box entries and anchors. Try to compute IoU of each pair of GT box entry &
         # anchors for final high-confidence pairs. It is possible there are >1 anchors mapped to a single GT box.
         # targets: N x 6 -repeat-> Na x Nt x 6 -concat-> Na x Nt x (6 + 1)
@@ -96,13 +98,14 @@ class LossCalculator:
             # 当前feature map对应的三个anchor尺寸
             # anchors and prediction of current feature map
             anchors, shape = self.anchors[i], predictions[i].shape
+
             # [1, 1, 1, 1, 1, 1, 1] -> [1, 1, gw, gh, gw, gh, 1] pattern=image_index+class+xywh+anchor_index
             # gw/gh : Current feature map width/height in grid
             gain[2:6] = torch.tensor(shape)[[3, 2, 3, 2]]  # xyxy gain  todo yxhw pattern in prediction?
 
             # Match targets to anchors
             targets[..., 2:6] /= self.inp_dim  # Scale xywh to scope [0,1]
-            t = targets * gain  # shape(3,nt,7). Map targets' xywh to current feature map
+            t = targets * gain  # shape(3,nt,7). Map targets' coord to current feature map
             if nt:  # Matching only if any GT box available.
                 # Matches
                 # t: Na x Nt x 7 -> Na x Nt x 2
@@ -115,9 +118,9 @@ class LossCalculator:
                 # Pick out max of width and height ratios of GT boxes vs anchors per grid cell, including gt_w/an_w,
                 # gt_h/an_h, an_w/gt_w and an_h/gt_h. If less than pre-defined threshold, the grid cell is taken as
                 # a positive sample of the GT. Otherwise, negative.
-                # 1st .max: Pick out max one of each pair of item from both Na x Nt x 2 tensors and achieve another
-                # Na x Nt x 2 tensor.
-                # 2nd .max: Pick max one in dim-2. Return max values and their indices with same shape Na x Nt
+                # 1st .max: Pick out max one among r and 1/r and achieve another Na x Nt x 2 tensor.
+                # 2nd .max: Pick max one in dim-2 of Na x Nt x 2 tensor. Return max values and their indices with
+                # same shape Na x Nt
                 # j: bool. Na x Nt  True: Current anchor is positive sample of current GT box. False: Negative sample.
                 j = torch.max(r, 1 / r).max(2)[0] < float(self.hyp['anchor_t'])  # compare
                 # j = wh_iou(anchors, t[:, 4:6]) > model.hyp['iou_t']  # iou(3,n)=wh_iou(anchors(3,2), gwh(n,2))
@@ -225,7 +228,7 @@ class LossCalculator:
         # gtboxes: list of GT per image. n x 6
         #   item as list: img id in the batch, class id, cx,    cy,    w,     h
         #   example:           0                 3       0.1    0.2    1.5    0.6
-        # Note: bbox coord in NN model space.
+        # Note: predictions and gtbbox coord in NN model space.
 
         # *** Organize argument p ***
         vectorsize = predictions.size(-1)
@@ -238,9 +241,9 @@ class LossCalculator:
             # first, phead = True, None
             for head in range(num_head):
                 mask = (prediction[:, -1] == head).float().unsqueeze(-1)
-                p_ = prediction[:, 5].clone() * mask
+                p_ = prediction[:, 5].clone().detach() * mask
                 ind_nz = torch.nonzero(p_[:, 5]).view(-1)
-                if len(ind_nz.shape) == 0:
+                if ind_nz.size(0) == 0:
                     continue
                 if len(ind_nz) not in [507, 2028, 8112]:
                     print("Internal error. Illegal tensor size: %d" % len(ind_nz))
@@ -250,19 +253,6 @@ class LossCalculator:
                     p[head] = torch.cat((p[head], b1), 0)
                 else:
                     p.append(b1)
-                # for ind in ind_nz:
-                #     b0 = torch.tensor(prediction[ind, :])
-                #     b1 = b0.repeat(self.gridsizes[head], 1).repeat(self.gridsizes[head], 1, 1).repeat(num_anchors, 1, 1, 1).unsqueeze(0)
-                #     # b0 = torch.zeros([1, self.gridsizes[head], self.gridsizes[head], 6])
-                #     # b0[..., 2:6] = prediction[ind, 2:6]
-                #     # b1 = b0.repeat(1, num_anchors, 1, 1, 1)
-                #     if first:
-                #         phead = b1
-                #         first = False
-                #     else:
-                #         phead = torch.cat((phead, b1), 1)
-            # if phead:
-            #     p.append(phead)
             assert len(p) == num_head, 'All heads should have detection. ' + p
         # p: list of prediction per feature map, dtype=tensor
         #   item shape: Bsize x anchor#/point of current scale x grid size x grid size x bbox attr

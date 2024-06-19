@@ -31,18 +31,18 @@ class test_net(nn.Module):
         return fwd(x)
 
 
-def get_test_input(input_dim, CUDA):
-    img = cv2.imread("dog-cycle-car.png")
-    img = cv2.resize(img, (input_dim, input_dim))
-    img_ = img[:, :, ::-1].transpose((2, 0, 1))
-    img_ = img_[np.newaxis, :, :, :] / 255.0
-    img_ = torch.from_numpy(img_).float()
-    img_ = Variable(img_)
-
-    if CUDA:
-        img_ = img_.cuda()
-    num_classes
-    return img_
+# def get_test_input(input_dim, CUDA):
+#     img = cv2.imread("dog-cycle-car.png")
+#     img = cv2.resize(img, (input_dim, input_dim))
+#     img_ = img[:, :, ::-1].transpose((2, 0, 1))
+#     img_ = img_[np.newaxis, :, :, :] / 255.0
+#     img_ = torch.from_numpy(img_).float()
+#     img_ = Variable(img_)
+#
+#     if CUDA:
+#         img_ = img_.cuda()
+#     num_classes
+#     return img_
 
 
 def arg_parse():
@@ -66,6 +66,8 @@ def arg_parse():
     parser.add_argument("--nms-thresh", dest="nms_thresh", help="NMS Threshhold", default=0.4)
     parser.add_argument("--pt-model", dest='pretrained_model', help="pretrained_model",
                         default="yolov3", type=str)
+    parser.add_argument("--class-names", dest='cls_names', help="File including class names",
+                        default="'data/coco.names'", type=str)
     parser.add_argument("--reso", dest='reso',
                         help="Input resolution of the network. Increase to increase accuracy. "
                              "Decrease to increase speed",
@@ -90,7 +92,8 @@ if __name__ == '__main__':
     CUDA = torch.cuda.is_available()
     device = 'cuda' if CUDA else 'cpu'
 
-    classes = load_classes('data/coco.names')
+    fn_clsnames = args.cls_names
+    classes = load_classes(fn_clsnames)
 
     # Set up the neural network
     print("Loading network.....")
