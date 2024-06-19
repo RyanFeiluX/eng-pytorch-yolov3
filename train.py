@@ -29,8 +29,8 @@ def load_gtboxes(batch, inp_dim, scale=None, move=None):
     @param inp_dim: Size of image in model space
     @param scale: Model/real
     @param move: Distance to move boxes for centering the boxes
-    @return: GT boxes list. pattern: img id, cls id, x1, y1, x2, y2.
-             x1, y1, x2, y2 in model space.
+    @return: GT boxes list. Item pattern: img id, cls id, x1, y1, x2, y2.
+             x1, y1, x2, y2 is normalized to range [0, 1].
     """
     labels = []
     labeldir = osp.join(osp.split(batch[0])[0], 'labeled')
@@ -51,7 +51,6 @@ def load_gtboxes(batch, inp_dim, scale=None, move=None):
                     coords = line_[1:]
                     coords = np.array(coords) * s
                     coords[0:2] += m
-                    coords[0:2] /= inp_dim,
                     labels.append([idx, cls_id] + coords.tolist())
     return labels
 
@@ -70,20 +69,22 @@ def arg_parse():
 
     parser = argparse.ArgumentParser(description='YOLO v3 Detection Module')
 
-    parser.add_argument("--images", dest='images',
+    parser.add_argument("--images", dest='images', required=True,
                         help="Directory containing images to perform training upon",
                         default="dataset", type=str)
     parser.add_argument("--bs", dest="bs", help="Batch size", default=1)
     parser.add_argument("--confidence", dest="confidence",
                         help="Object Confidence to filter predictions",
                         default=0.3)
-    parser.add_argument("--nms_thresh", dest="nms_thresh", help="NMS Threshhold", default=0.4)
+    # parser.add_argument("--nms_thresh", dest="nms_thresh", help="NMS Threshhold", default=0.4)
     parser.add_argument("--pt-model", dest='pretrained_model', help="pretrained_model",
                         default=None, type=str)
     parser.add_argument("--new-model", dest='new_model', help="New model to be generated or finetuned",
                         default="yolox", type=str)
     parser.add_argument("--cfg-ref", dest='cfg_ref', help="CFG file as model configuration",
                         default="yolov3", type=str)
+    parser.add_argument("--class-names", dest='cls_names', help="File including class names",
+                        default="data/coco.names", type=str)
     parser.add_argument("--reso", dest='reso',
                         help="Input resolution of the network. Increase to increase accuracy. "
                              "Decrease to increase speed",
@@ -104,7 +105,7 @@ if __name__ == '__main__':
 
     if args.new_model:
         fn_newcfg = osp.join(osp.dirname(args.cfg_ref), osp.splitext(osp.basename(args.new_model))[0] + '.cfg')
-        if not osp.samefile(args.cfg_ref, fn_newcfg):
+        if osp.basename(args.cfg_ref) != osp.basename(fn_newcfg):
             shutil.copy(args.cfg_ref, fn_newcfg)
         # os.sync()
     else:
@@ -115,14 +116,14 @@ if __name__ == '__main__':
     images = args.images
     batch_size = int(args.bs)
     confidence = float(args.confidence)
-    nms_thresh = float(args.nms_thresh)
+    # nms_thresh = float(args.nms_thresh)
     start = 0
 
     CUDA = torch.cuda.is_available()
     device = 'cuda' if CUDA else 'cpu'
 
-    # num_classes = 80
-    classes = load_classes('data/coco.names')
+    fn_clsnames = args.cls_names
+    classes = load_classes(fn_clsnames)
 
     # Set up the neural network
     print("Loading network.....")
@@ -133,6 +134,9 @@ if __name__ == '__main__':
     else:
         init_weights(model)
     print("Network successfully loaded")
+
+    # fn_clsnames = model.net_info['class_names']
+    # classes = load_classes('data/coco.names')
 
     model.net_info["height"] = args.reso
     inp_dim = int(model.net_info["height"])
@@ -207,6 +211,7 @@ if __name__ == '__main__':
     epoches = int(model.net_info["epoches"])
     for epoch in range(epoches):
         bloss = 0.0
+        batloss = torch.tensor((0.0, 0.0, 0.0), device=device)
         output = None
         write = False
         for idx, batch in enumerate(im_batches):
@@ -291,6 +296,15 @@ if __name__ == '__main__':
             gtboxes = load_gtboxes(pathbatch, inp_dim,
                                    scale=scalebatch,
                                    move=movebatch)
+            # gtboxes pattern: x1, y1, x2, y2 is normalized to range [0, 1]
+
+            if len(gtboxes) == 0:
+                img_idx = idx * batch_size
+                images = imlist[idx * batch_size: min((idx + 1) * batch_size, len(imlist))]
+                images = [osp.basename(i) for i in images]
+                print('No annotation for batch[%d] %s' % (idx, images))
+                continue
+
             loss, loss_items = lcalc.calc_loss(prediction, gtboxes)
 
             optimizer.zero_grad()
@@ -302,61 +316,11 @@ if __name__ == '__main__':
                 torch.cuda.synchronize()
 
             bloss += loss
-        print('Epoch: %3d\tLoss: %.4f' % (epoch, bloss))
+            batloss += loss_items
+        lbox, lobj, lcls = batloss
+        print('Epoch: %3d\tLoss=%9.6f\tlbox= %9.6f\tlobj=%9.6f\tlcls=%9.6f' % (epoch, bloss, lbox, lobj, lcls))
 
-    # if output is None:
-    #     print("No detections were made")
-    #     exit()
-    # elif type(output) is int:
-    #     print("No object was detected")
-    #     exit()
-
-    # im_dim_list = torch.index_select(im_dim_list, 0, output[:, 0].long())
-    #
-    # scaling_factor = torch.min(inp_dim / im_dim_list, 1)[0].view(-1, 1)
-    #
-    # output[:, [1, 3]] -= (inp_dim - scaling_factor * im_dim_list[:, 0].view(-1, 1)) / 2
-    # output[:, [2, 4]] -= (inp_dim - scaling_factor * im_dim_list[:, 1].view(-1, 1)) / 2
-    #
-    # output[:, 1:5] /= scaling_factor
-    #
-    # for idx in range(output.shape[0]):
-    #     # Forced type cast for green code inspection
-    #     output[idx, [1, 3]] = torch.clamp(output[idx, [1, 3]],
-    #                                       torch.Tensor([0.0]).to('cuda' if CUDA else 'cpu'), im_dim_list[idx, 0])
-    #     output[idx, [2, 4]] = torch.clamp(output[idx, [2, 4]],
-    #                                       torch.Tensor([0.0]).to('cuda' if CUDA else 'cpu'), im_dim_list[idx, 1])
-    #
     output_recast = time.time()
-    #
-    # class_load = time.time()
-    #
-    # colors = pkl.load(open("pallete", "rb"))
-    #
-    # draw = time.time()
-
-
-    def write(x, batches, results):
-        c1 = tuple(x[1:3].int()) if not CUDA else tuple(x[1:3].cpu().int().numpy())
-        c2 = tuple(x[3:5].int()) if not CUDA else tuple(x[3:5].cpu().int().numpy())
-        img = results[int(x[0])]
-        cls = int(x[-1])
-        label = "{0}".format(classes[cls])
-        color = random.choice(colors)
-        cv2.rectangle(img, c1, c2, color, thickness=2)
-        t_size = cv2.getTextSize(label, cv2.FONT_HERSHEY_PLAIN, 1, 1)[0]
-        t_margin = (4, 6)
-        c2 = c1[0] + t_size[0] + t_margin[0] * 2, c1[1] + t_size[1] + t_margin[1] * 2
-        cv2.rectangle(img, c1, c2, color, -1)
-        cv2.putText(img, label, (c1[0]+t_margin[0], c1[1] + t_size[1] + t_margin[1]),
-                    cv2.FONT_HERSHEY_PLAIN, 1, [225, 255, 255], 1)
-        return img
-
-    # list(map(lambda x: write(x, im_batches, orig_ims), output))
-    #
-    # det_names = pd.Series(imlist).apply(lambda x: "{}/det_{}".format(args.det, os.path.basename(x)))
-    #
-    # list(map(cv2.imwrite, det_names, orig_ims))  # det_names and orig_ims as arguments of cv2.imwrite()
 
     end = time.time()
 
