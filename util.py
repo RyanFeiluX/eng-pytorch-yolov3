@@ -26,6 +26,15 @@ def convert2cpu(matrix):
 
 
 def predict_transform(prediction, inp_dim, anchors, num_classes, CUDA=True):
+    """
+    Transform coord to model space
+    @param prediction:
+    @param inp_dim:
+    @param anchors:
+    @param num_classes:
+    @param CUDA:
+    @return: Tensor with same shape as argument prediction. Wherein, coord is transformed to cx,cy,h,w of model space.
+    """
     # coord <-> input: bx = cx + sigmoid(tx)
     batch_size = prediction.size(0)
     stride = inp_dim // prediction.size(2)
@@ -67,12 +76,12 @@ def predict_transform(prediction, inp_dim, anchors, num_classes, CUDA=True):
 
     anchors = anchors.repeat(grid_size * grid_size, 1).unsqueeze(0)
     # log space transform height and the width
-    prediction[:, :, 2:4] = torch.exp(prediction[:, :, 2:4]) * anchors  # Get positive w & h via exponential
+    prediction[:, :, 2:4] = torch.exp(prediction[:, :, 2:4]) * anchors  # Get positive h & w via exponential
 
     # Sigmoid the class scores
     prediction[:, :, 5: 5 + num_classes] = torch.sigmoid((prediction[:, :, 5: 5 + num_classes]))
 
-    prediction[:, :, :4] *= stride  # The multiplication by stride map bboxes to original image
+    prediction[:, :, :4] *= stride  # The multiplication by stride map bboxes to model space
 
     return prediction
 
