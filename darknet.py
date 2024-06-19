@@ -41,7 +41,7 @@ def parse_cfg(cfgfile):
     """
     Takes a configuration file
     
-    Returns a list of blocks. Each blocks describes a block in the neural
+    Returns a list of blocks. Each block describes a block in the neural
     network to be built. Block is represented as a dictionary in the list
     
     """
@@ -397,19 +397,14 @@ class Darknet(nn.Module):
                 # x shape: B size * (anchor# * grid size * grid size) * bbox attributions
                 # example: 2      * 507                               * 85
                 #                   3 x 13 x 13
+                # Note: In bbox attr, coord is remapped from 1 to NN model space
 
                 if type(x) is int:  # What about chance to get a integer x?
                     continue
 
                 # Append heads to bbox attributions
-                headshape = list(x.shape)
-                headshape[-1] = 1
-                head_ = x[..., 0].clone()[..., None].detach().to(x.device)
-                head_[..., 0] = int(modules[i]["head"])
-                x = torch.cat((x, head_), -1)
-                err_head = x[..., -1] != int(modules[i]["head"])
-                if True in err_head.flatten():
-                    print("Internal error. Invalid head info")
+                headts = torch.zeros_like(x[..., 0]).fill_(int(modules[i]["head"])).unsqueeze(-1).to(x.device)
+                x = torch.cat((x, headts), -1)
 
                 # Concatenate predictions from 3 scales of feature maps.
                 # This step can be another route layer if each yolo layer keeps its prediction in outputs.
